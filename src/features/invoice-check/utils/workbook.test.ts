@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 
+import { analyze } from "./analyze";
 import { InputError } from "./inputError";
-import { MAX_ROWS, readInput } from "./workbook";
+import { MAX_ROWS, readInput, writeResult } from "./workbook";
 
 function fixture(name: string): ArrayBuffer {
   const buffer = readFileSync(`fixtures/${name}`);
@@ -88,5 +89,52 @@ describe("readInput", () => {
   it("rejects more than MAX_ROWS rows", async () => {
     const rows = Array.from({ length: MAX_ROWS + 1 }, (_, i) => [i + 1, "03/05/2025", "-", "A", "x"]);
     await expectInputError(readInput(await buildWorkbook(rows)), "too_many_rows");
+  });
+});
+
+async function reload(data: ArrayBuffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(data);
+  return workbook;
+}
+
+describe("writeResult", () => {
+  it("fills the template sheets of the sample", async () => {
+    const input = await readInput(fixture("sample.xlsx"));
+    const output = await reload(await writeResult(input.workbook, analyze(input.rows, input.threshold)));
+    const result = output.getWorksheet("KET_QUA_AI")!;
+    const detail = output.getWorksheet("PHAN_TICH_AI")!;
+
+    expect(result.getCell("G11").value).toEqual(new Date(Date.UTC(2025, 4, 2)));
+    expect(result.getCell("G11").numFmt).toBe("dd/mm/yyyy");
+    expect(result.getCell("C11").value).toEqual(new Date(Date.UTC(2025, 4, 3)));
+    expect(result.getCell("H11").value).toBe(1);
+    expect(result.getCell("I11").value).toBe("Cảnh báo");
+    expect(result.getCell("I11").font.color?.argb).toBe("FFFF0000");
+    expect(result.getCell("I16").value).toBe("Bình thường");
+    expect(result.getCell("I16").font.color?.argb).toBe("FF000000");
+    expect(["F6", "G6", "H6", "I6"].map((a) => result.getCell(a).value)).toEqual([9, 1, 8, 0]);
+
+    expect(detail.getCell("C2").value).toEqual(new Date(Date.UTC(2025, 4, 2)));
+    expect(["D2", "E2", "F2"].map((a) => detail.getCell(a).value)).toEqual(["Quy tắc", 1, "Đã xác định"]);
+  });
+
+  it("clears stale rows from the template", async () => {
+    const input = await readInput(fixture("sample.xlsx"));
+    const output = await reload(await writeResult(input.workbook, analyze(input.rows.slice(0, 3), input.threshold)));
+    expect(output.getWorksheet("KET_QUA_AI")!.getCell("A14").value).toBeNull();
+    expect(output.getWorksheet("PHAN_TICH_AI")!.getCell("A5").value).toBeNull();
+    expect(output.getWorksheet("KET_QUA_AI")!.getCell("F6").value).toBe(3);
+  });
+
+  it("creates both sheets when the upload has only DU_LIEU_GOC", async () => {
+    const input = await readInput(await buildWorkbook([[1, "03/05/2025", "-", "A", "(30/04/2025-02/05/2025)"]]));
+    const output = await reload(await writeResult(input.workbook, analyze(input.rows, input.threshold)));
+    const result = output.getWorksheet("KET_QUA_AI")!;
+    const detail = output.getWorksheet("PHAN_TICH_AI")!;
+    expect(result.getCell("A1").value).toBe("STT");
+    expect(result.getCell("I2").value).toBe("Cảnh báo");
+    expect(detail.getCell("A1").value).toBe("STT");
+    expect(detail.getCell("D2").value).toBe("Quy tắc");
   });
 });
