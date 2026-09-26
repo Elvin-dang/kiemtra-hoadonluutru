@@ -1,8 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::Duration;
 
+use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tauri::Manager;
 
 pub const PROMPT: &str =
     "Trích xuất ngày kết thúc dịch vụ/check-out từ thông tin lưu trú. Chỉ trả về DD/MM/YYYY hoặc KHONG_XAC_DINH.";
@@ -112,9 +115,159 @@ pub fn mask_key(key: &str) -> String {
     chars[chars.len().saturating_sub(4)..].iter().collect()
 }
 
+const OPENAI_URL: &str = "https://api.openai.com/v1/responses";
+const TIMEOUT: Duration = Duration::from_secs(15);
+const KEY_SERVICE: &str = "kiemtra-hoadon";
+const KEY_USER: &str = "openai";
+const DEFAULT_MODEL: &str = "gpt-6-luna";
+
+fn failed(note: impl Into<String>) -> AiItem {
+    AiItem::Failed { date: None, note: note.into() }
+}
+
+#[tauri::command]
+fn startup_file(state: tauri::State<'_, StartupFile>) -> Option<String> {
+    state.take()
+}
+
+#[tauri::command]
+fn read_file(path: String) -> Result<tauri::ipc::Response, String> {
+    std::fs::read(&path)
+        .map(tauri::ipc::Response::new)
+        .map_err(|error| format!("Không đọc được file: {error}"))
+}
+
+#[tauri::command]
+fn save_next_to(source_path: String, file_name: String, bytes: Vec<u8>) -> Result<String, String> {
+    let dir = Path::new(&source_path)
+        .parent()
+        .ok_or_else(|| "Không xác định được thư mục của file gốc".to_string())?;
+    let target = next_free_path(dir, &file_name, |candidate| candidate.exists());
+    std::fs::write(&target, bytes).map_err(|error| format!("Không lưu được file: {error}"))?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn save_as(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    std::fs::write(&path, bytes).map_err(|error| format!("Không lưu được file: {error}"))
+}
+
+fn key_entry() -> Result<keyring::Entry, String> {
+    keyring::Entry::new(KEY_SERVICE, KEY_USER).map_err(|error| error.to_string())
+}
+
+fn read_key() -> Option<String> {
+    key_entry().ok()?.get_password().ok().filter(|key| !key.trim().is_empty())
+}
+
+#[tauri::command]
+fn ai_key_status() -> Option<String> {
+    read_key().map(|key| mask_key(&key))
+}
+
+#[tauri::command]
+fn set_ai_key(key: String) -> Result<(), String> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("Khóa trống".to_string());
+    }
+    key_entry()?.set_password(key).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn delete_ai_key() -> Result<(), String> {
+    match key_entry()?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path().app_config_dir().map(|dir| dir.join("config.json")).map_err(|error| error.to_string())
+}
+
+fn read_model(app: &tauri::AppHandle) -> String {
+    config_path(app)
+        .ok()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .and_then(|config| config["model"].as_str().map(str::to_owned))
+        .filter(|model| !model.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_MODEL.to_string())
+}
+
+#[tauri::command]
+fn get_model(app: tauri::AppHandle) -> String {
+    read_model(&app)
+}
+
+#[tauri::command]
+fn set_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
+    let path = config_path(&app)?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+    }
+    let config = serde_json::json!({ "model": model.trim() });
+    std::fs::write(path, config.to_string()).map_err(|error| error.to_string())
+}
+
+async fn ask_one(client: &reqwest::Client, key: &str, model: &str, text: &str) -> AiItem {
+    let response = match client.post(OPENAI_URL).bearer_auth(key).json(&request_body(model, text)).send().await {
+        Ok(response) => response,
+        Err(_) => return failed("Không gọi được AI"),
+    };
+    if !response.status().is_success() {
+        return failed(note_for_status(response.status().as_u16()));
+    }
+    match response.json::<Value>().await {
+        Ok(payload) => AiItem::Answer { answer: output_text(&payload) },
+        Err(_) => failed("Không gọi được AI"),
+    }
+}
+
+#[tauri::command]
+async fn ask_ai(app: tauri::AppHandle, texts: Vec<String>, limits: Limits) -> AiAnswer {
+    let Some(key) = read_key() else { return AiAnswer::Disabled };
+    let model = read_model(&app);
+    let limits = limits.effective();
+    if texts.is_empty() || texts.len() > limits.max_texts {
+        return AiAnswer::Failed;
+    }
+    let Ok(client) = reqwest::Client::builder().timeout(TIMEOUT).build() else { return AiAnswer::Failed };
+    let texts: Vec<String> = texts.into_iter().map(|text| text.chars().take(limits.max_text_length).collect()).collect();
+    let results = stream::iter(texts)
+        .map(|text| {
+            let client = client.clone();
+            let key = key.clone();
+            let model = model.clone();
+            async move { ask_one(&client, &key, &model, &text).await }
+        })
+        .buffered(limits.concurrency)
+        .collect()
+        .await;
+    AiAnswer::Ok { results }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let args: Vec<String> = std::env::args().collect();
+    let startup = startup_xlsx(&args, |path| path.is_file());
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .manage(StartupFile(Mutex::new(startup)))
+        .invoke_handler(tauri::generate_handler![
+            startup_file,
+            read_file,
+            save_next_to,
+            save_as,
+            ai_key_status,
+            set_ai_key,
+            delete_ai_key,
+            get_model,
+            set_model,
+            ask_ai
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
