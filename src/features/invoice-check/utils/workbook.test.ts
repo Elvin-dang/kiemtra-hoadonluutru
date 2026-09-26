@@ -162,13 +162,45 @@ describe("writeResult", () => {
     expect(result.getCell("C11").value).toEqual(new Date(Date.UTC(2025, 4, 3)));
     expect(result.getCell("H11").value).toBe(1);
     expect(result.getCell("I11").value).toBe("Cảnh báo");
-    expect(result.getCell("I11").font.color?.argb).toBe("FFFF0000");
+    expect(result.getCell("I11").font.color?.argb).toBe("FFDC2626");
     expect(result.getCell("I16").value).toBe("Bình thường");
-    expect(result.getCell("I16").font.color?.argb).toBe("FF000000");
+    expect(result.getCell("I16").font.color?.argb).toBe("FF0B7A5E");
     expect(["F6", "G6", "H6", "I6"].map((a) => result.getCell(a).value)).toEqual([9, 1, 8, 0]);
 
     expect(detail.getCell("C2").value).toEqual(new Date(Date.UTC(2025, 4, 2)));
     expect(["D2", "E2", "F2"].map((a) => detail.getCell(a).value)).toEqual(["Quy tắc", 1, "Đã xác định"]);
+  });
+
+  it("styles rows beyond the template like its first data row", async () => {
+    const input = await readAll(fixture("sample.xlsx"));
+    const rows = [...input.rows, ...input.rows.slice(0, 3)]; // 12 rows: 3 more than the template styles
+    const output = await reload(await writeResult(input.workbook, analyze(rows, input.threshold)));
+    const result = output.getWorksheet("KET_QUA_AI")!;
+    const detail = output.getWorksheet("PHAN_TICH_AI")!;
+
+    for (let c = 1; c <= 9; c++) {
+      expect(result.getCell(22, c).border).toEqual(result.getCell(11, c).border);
+      expect(result.getCell(22, c).alignment).toEqual(result.getCell(11, c).alignment);
+    }
+    expect(result.getRow(22).height).toBe(result.getRow(11).height);
+    expect(result.getCell("I22").value).toBe("Cảnh báo");
+    for (let c = 1; c <= 7; c++) expect(detail.getCell(13, c).border).toEqual(detail.getCell(2, c).border);
+  });
+
+  it("colours the status cells by the row's own status, not the template row", async () => {
+    const input = await readAll(fixture("sample.xlsx"));
+    const rows = input.rows.map((row, i) => (i === 5 ? { ...row, info: "Thuê phòng nghỉ" } : row));
+    const output = await reload(await writeResult(input.workbook, analyze(rows, input.threshold)));
+    const result = output.getWorksheet("KET_QUA_AI")!;
+    const fillOf = (address: string) => {
+      const fill = result.getCell(address).fill;
+      return fill?.type === "pattern" ? (fill.fgColor?.argb ?? fill.pattern) : undefined;
+    };
+
+    expect(result.getCell("I16").value).toBe("Không xác định"); // template row 16 was the green "Bình thường" row
+    expect([fillOf("H16"), fillOf("I16")]).toEqual(["none", "none"]);
+    expect(result.getCell("I16").font.color?.argb).toBe("FF000000");
+    expect([fillOf("H11"), fillOf("I11")]).toEqual(["FFFEF2F2", "FFFEF2F2"]);
   });
 
   it("clears stale rows from the template", async () => {

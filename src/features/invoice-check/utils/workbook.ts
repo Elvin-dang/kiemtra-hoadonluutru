@@ -5,7 +5,7 @@ import { formatDate } from "@/shared/utils/formatDate";
 import { suggestMapping } from "./columns";
 import { InputError } from "./inputError";
 
-import type { AnalysisResult, CellValue, ColumnMapping, InputRow, SheetColumn } from "../types/invoice";
+import type { AnalysisResult, CellValue, ColumnMapping, InputRow, SheetColumn, Status } from "../types/invoice";
 
 export const MAX_ROWS = 5000;
 const SOURCE_SHEET = "DU_LIEU_GOC";
@@ -91,8 +91,14 @@ const RESULT_SHEET = "KET_QUA_AI";
 const DETAIL_SHEET = "PHAN_TICH_AI";
 const RESULT_TEMPLATE_FIRST_ROW = 11;
 const DATE_FORMAT = "dd/mm/yyyy";
-const RED = "FFFF0000";
-const BLACK = "FF000000";
+const DETAIL_TEMPLATE_FIRST_ROW = 2;
+const STATUS_COLUMNS = [8, 9]; // Số ngày chậm, Trạng thái
+// The template's own palette (pink/red for warnings, green for normal).
+const STATUS_STYLE: Record<Status, { fill: string | null; font: string }> = {
+  "Cảnh báo": { fill: "FFFEF2F2", font: "FFDC2626" },
+  "Bình thường": { fill: "FFF0FDF4", font: "FF0B7A5E" },
+  "Không xác định": { fill: null, font: "FF000000" },
+};
 const RESULT_HEADERS = [
   "STT", "Số hóa đơn", "Ngày hóa đơn", "Mã số thuế", "Tên người mua",
   "Thông tin thời gian lưu trú", "Ngày phải lập HĐ", "Số ngày chậm", "Trạng thái",
@@ -113,6 +119,36 @@ function setRow(sheet: ExcelJS.Worksheet, rowNumber: number, values: CellValue[]
   });
 }
 
+type RowStyle = { height: number | undefined; cells: Partial<ExcelJS.Style>[] };
+
+// Snapshot before writing: the template styles only its sample rows, and those carry per-row status colours.
+function captureRowStyle(sheet: ExcelJS.Worksheet, rowNumber: number, columns: number): RowStyle {
+  const row = sheet.getRow(rowNumber);
+  return {
+    height: row.height,
+    cells: Array.from({ length: columns }, (_, i) => structuredClone(row.getCell(i + 1).style)),
+  };
+}
+
+function applyRowStyle(sheet: ExcelJS.Worksheet, rowNumber: number, style: RowStyle) {
+  const row = sheet.getRow(rowNumber);
+  if (style.height) row.height = style.height;
+  style.cells.forEach((cellStyle, i) => {
+    row.getCell(i + 1).style = structuredClone(cellStyle);
+  });
+}
+
+function applyStatusStyle(sheet: ExcelJS.Worksheet, rowNumber: number, status: Status) {
+  const { fill, font } = STATUS_STYLE[status];
+  for (const column of STATUS_COLUMNS) {
+    const cell = sheet.getCell(rowNumber, column);
+    cell.fill = fill
+      ? { type: "pattern", pattern: "solid", fgColor: { argb: fill } }
+      : { type: "pattern", pattern: "none" };
+    cell.font = { ...cell.font, color: { argb: font } };
+  }
+}
+
 function sheetOrCreate(workbook: ExcelJS.Workbook, name: string, headers: string[]) {
   const existing = workbook.getWorksheet(name);
   if (existing) return { sheet: existing, isTemplate: true };
@@ -127,20 +163,29 @@ export async function writeResult(workbook: ExcelJS.Workbook, { results, counts 
   const detail = sheetOrCreate(workbook, DETAIL_SHEET, DETAIL_HEADERS);
   const firstResultRow = result.isTemplate ? RESULT_TEMPLATE_FIRST_ROW : 2;
 
+  const resultStyle = result.isTemplate
+    ? captureRowStyle(result.sheet, RESULT_TEMPLATE_FIRST_ROW, RESULT_HEADERS.length)
+    : null;
+  const detailStyle = detail.isTemplate
+    ? captureRowStyle(detail.sheet, DETAIL_TEMPLATE_FIRST_ROW, DETAIL_HEADERS.length)
+    : null;
+
   clearRows(result.sheet, firstResultRow, RESULT_HEADERS.length);
-  clearRows(detail.sheet, 2, DETAIL_HEADERS.length);
+  clearRows(detail.sheet, DETAIL_TEMPLATE_FIRST_ROW, DETAIL_HEADERS.length);
 
   results.forEach((row, i) => {
-    setRow(detail.sheet, 2 + i, [
+    const detailRow = DETAIL_TEMPLATE_FIRST_ROW + i;
+    if (detailStyle) applyRowStyle(detail.sheet, detailRow, detailStyle);
+    setRow(detail.sheet, detailRow, [
       row.stt, row.info, row.checkout, row.method, row.confidence,
       row.checkout ? "Đã xác định" : "Không xác định", row.note,
     ]);
     const rowNumber = firstResultRow + i;
+    if (resultStyle) applyRowStyle(result.sheet, rowNumber, resultStyle);
     setRow(result.sheet, rowNumber, [
       row.stt, row.invoiceNo, row.invoiceDate, row.taxCode, row.buyer, row.info, row.checkout, row.delay, row.status,
     ]);
-    const statusCell = result.sheet.getCell(rowNumber, 9);
-    statusCell.font = { ...statusCell.font, color: { argb: row.status === "Cảnh báo" ? RED : BLACK } };
+    applyStatusStyle(result.sheet, rowNumber, row.status);
   });
 
   if (result.isTemplate) {
