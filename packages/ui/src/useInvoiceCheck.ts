@@ -95,11 +95,10 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
 
   const openFile = useCallback(
     async (pending: Promise<SourceFile | null>) => {
-      setState({ phase: "processing", fileName: "" });
       try {
         const file = await pending;
+        // A cancelled picker (null) leaves whatever is on screen untouched.
         if (file) await handleFile(file);
-        else setState({ phase: "idle" });
       } catch (error) {
         setState({ phase: "error", message: typeof error === "string" ? error : ERROR_MESSAGES.unreadable });
       }

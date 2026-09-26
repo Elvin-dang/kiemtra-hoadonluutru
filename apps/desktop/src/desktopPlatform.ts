@@ -27,9 +27,14 @@ async function readSource(path: string): Promise<SourceFile> {
 // (StrictMode's double-mount included) awaits the same answer instead of asking again.
 let startupFile: Promise<string | null> | null = null;
 function getStartupFile(): Promise<string | null> {
-  startupFile ??= invoke<string | null>("startup_file");
+  startupFile ??= invoke<string | null>("startup_file").catch(() => null);
   return startupFile;
 }
+
+// The launch file itself must reach exactly one subscriber for the whole session, even
+// though later mounts (an AI-settings change re-subscribing, StrictMode, ...) call
+// onExternalFile again with the same still-resolved startup promise.
+let startupTaken = false;
 
 function toBytes(data: ArrayBuffer): number[] {
   return Array.from(new Uint8Array(data));
@@ -73,7 +78,10 @@ export const desktopPlatform: Platform = {
       else stop();
     })();
     void getStartupFile().then((path) => {
-      if (path && isActive) handler(readSource(path));
+      if (path && isActive && !startupTaken) {
+        startupTaken = true;
+        handler(readSource(path));
+      }
     });
     return () => {
       isActive = false;

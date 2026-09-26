@@ -125,4 +125,33 @@ describe("desktopPlatform.onExternalFile", () => {
       data: expect.any(ArrayBuffer),
     });
   });
+
+  it("hands the startup file to only the first subscriber that ever receives it, never later re-subscribers", async () => {
+    mockInvoke("/tmp/hoadon.xlsx");
+    const platform = await loadDesktopPlatform();
+
+    const firstHandler = vi.fn();
+    const unsubscribeFirst = platform.onExternalFile?.(firstHandler);
+    await vi.waitFor(() => expect(firstHandler).toHaveBeenCalledTimes(1));
+    await expect(firstHandler.mock.calls[0][0]).resolves.toEqual({
+      name: "hoadon.xlsx",
+      path: "/tmp/hoadon.xlsx",
+      data: expect.any(ArrayBuffer),
+    });
+    unsubscribeFirst?.();
+
+    const secondHandler = vi.fn();
+    const unsubscribeSecond = platform.onExternalFile?.(secondHandler);
+    unsubscribeSecond?.();
+
+    const thirdHandler = vi.fn();
+    platform.onExternalFile?.(thirdHandler);
+
+    // Give any (incorrect) re-delivery a chance to happen before asserting it didn't.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(firstHandler).toHaveBeenCalledTimes(1);
+    expect(secondHandler).not.toHaveBeenCalled();
+    expect(thirdHandler).not.toHaveBeenCalled();
+  });
 });
