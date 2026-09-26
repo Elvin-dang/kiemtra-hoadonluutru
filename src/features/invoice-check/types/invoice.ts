@@ -41,3 +41,6 @@ export type MappingField = "invoiceNo" | "invoiceDate" | "taxCode" | "buyer" | "
 export type ColumnMapping = Record<MappingField, number | null>;
 
 export type SheetColumn = { index: number; letter: string; header: string };
+
+// Per-browser AI preferences; the server applies min(setting, its own ceiling).
+export type AiSettings = { maxTexts: number; maxTextLength: number; concurrency: number };

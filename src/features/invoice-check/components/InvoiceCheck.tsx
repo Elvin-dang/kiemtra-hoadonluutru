@@ -4,7 +4,9 @@ import { Alert, AlertDescription } from "@/shared/components/ui/alert";
 import { Button, buttonVariants } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 
+import { useAiSettings } from "../hooks/useAiSettings";
 import { useInvoiceCheck } from "../hooks/useInvoiceCheck";
+import { AiSettingsPanel } from "./AiSettingsPanel";
 import { ColumnMapping } from "./ColumnMapping";
 import { ResultTable } from "./ResultTable";
 import { SummaryTiles } from "./SummaryTiles";
@@ -12,7 +14,8 @@ import { SummaryTiles } from "./SummaryTiles";
 import type { ChangeEvent } from "react";
 
 export function InvoiceCheck() {
-  const { state, handleFile, handleConfirmMapping, handleCancel, handleDownload } = useInvoiceCheck();
+  const ai = useAiSettings();
+  const { state, handleFile, handleConfirmMapping, handleCancel, handleDownload } = useInvoiceCheck(ai.settings);
   const isProcessing = state.phase === "processing";
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -47,6 +50,13 @@ export function InvoiceCheck() {
         </a>
         {state.phase === "done" && <Button onClick={handleDownload}>Tải kết quả</Button>}
       </div>
+
+      <AiSettingsPanel
+        settings={ai.settings}
+        limits={ai.limits}
+        onChange={ai.updateSettings}
+        onReset={ai.resetSettings}
+      />
 
       {isProcessing && <p className="text-muted-foreground">Đang xử lý…</p>}
 

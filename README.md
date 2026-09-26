@@ -27,7 +27,13 @@ The site is public with no login, so cap what `/api/ai` can spend:
 - **OpenAI:** use a dedicated project for this key and set a monthly budget (e.g. $10) under Project → Limits.
 - **Vercel Firewall:** add a rate-limit rule for path `/api/ai`: 20 requests per minute per IP.
 
-The route itself accepts at most 50 texts of at most 500 characters per request, uses a fixed prompt, and never returns raw model text.
+The route uses a fixed prompt and never returns raw model text. Its limits are ceilings set by env vars (defaults in brackets):
+
+- `AI_MAX_TEXTS` (50): texts per request
+- `AI_MAX_TEXT_LENGTH` (500): characters per text
+- `AI_MAX_CONCURRENCY` (5): parallel OpenAI calls
+
+Each user can lower these for their own browser under **Cài đặt AI** on the page (saved in localStorage and sent with every request); the server applies `min(user setting, ceiling)`. Lowering "Số yêu cầu song song" to 1–2 is the quick fix for `AI HTTP 429` rate-limit errors. `GET /api/ai` returns the current ceilings.
 
 ## Reference
 

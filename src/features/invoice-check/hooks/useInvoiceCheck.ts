@@ -8,7 +8,7 @@ import { fetchAiOutcomes } from "../utils/aiClient";
 import { analyze, needsAi } from "../utils/analyze";
 import { InputError } from "../utils/inputError";
 
-import type { AnalysisResult, ColumnMapping, SheetColumn } from "../types/invoice";
+import type { AiSettings, AnalysisResult, ColumnMapping, SheetColumn } from "../types/invoice";
 import type { InputErrorCode } from "../utils/inputError";
 import type ExcelJS from "exceljs";
 
@@ -45,7 +45,7 @@ function errorMessage(error: unknown): string {
   return error instanceof InputError ? ERROR_MESSAGES[error.code] : ERROR_MESSAGES.unexpected;
 }
 
-export function useInvoiceCheck() {
+export function useInvoiceCheck(aiSettings: AiSettings) {
   const [state, setState] = useState<CheckState>({ phase: "idle" });
 
   const runAnalysis = useCallback(async (fileName: string, workbook: ExcelJS.Workbook, mapping: ColumnMapping) => {
@@ -54,7 +54,10 @@ export function useInvoiceCheck() {
       const { readRows, writeResult } = await import("../utils/workbook");
       const input = readRows(workbook, mapping);
       const aiIndices = needsAi(input.rows);
-      const outcomes = await fetchAiOutcomes(aiIndices.map((index) => input.rows[index].info));
+      const outcomes = await fetchAiOutcomes(
+        aiIndices.map((index) => input.rows[index].info),
+        aiSettings,
+      );
       const ai = new Map(aiIndices.map((rowIndex, k) => [rowIndex, outcomes[k]]));
       const analysis = analyze(input.rows, input.threshold, ai);
       const output = await writeResult(workbook, analysis);
@@ -62,7 +65,7 @@ export function useInvoiceCheck() {
     } catch (error) {
       setState({ phase: "error", message: errorMessage(error) });
     }
-  }, []);
+  }, [aiSettings]);
 
   const handleFile = useCallback(
     async (file: File) => {

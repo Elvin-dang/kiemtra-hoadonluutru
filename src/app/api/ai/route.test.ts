@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { POST } from "./route";
+import { GET, POST } from "./route";
 
 function post(body: unknown) {
   return POST(
@@ -21,6 +21,13 @@ function inputOf(init: RequestInit | undefined): string {
 }
 
 beforeEach(() => {
+  // Any test that reaches OpenAI must stub fetch itself; nothing may hit the network.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async () => {
+      throw new Error("unexpected network call");
+    }),
+  );
   vi.stubEnv("OPENAI_API_KEY", "sk-test");
   vi.stubEnv("OPENAI_MODEL", "test-model");
 });
@@ -124,5 +131,70 @@ describe("POST /api/ai", () => {
     expect(logged).not.toContain("Nguyễn");
     expect(logged).not.toContain("sk-test");
     logSpy.mockRestore();
+  });
+});
+
+describe("POST /api/ai — client settings within server ceilings", () => {
+  function trackConcurrency() {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight--;
+      return openAiReply("02/05/2025");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return () => maxInFlight;
+  }
+
+  const texts = (n: number) => Array.from({ length: n }, (_, i) => `t${i}`);
+
+  it("uses the concurrency the client asks for", async () => {
+    const maxInFlight = trackConcurrency();
+    const response = await post({ texts: texts(6), settings: { maxTexts: 50, maxTextLength: 500, concurrency: 2 } });
+    expect(response.status).toBe(200);
+    expect(maxInFlight()).toBe(2);
+  });
+
+  it("clamps a client concurrency above the server ceiling", async () => {
+    const maxInFlight = trackConcurrency();
+    await post({ texts: texts(10), settings: { maxTexts: 50, maxTextLength: 500, concurrency: 99 } });
+    expect(maxInFlight()).toBe(5);
+  });
+
+  it("applies a lower client maxTexts and maxTextLength", async () => {
+    const settings = { maxTexts: 2, maxTextLength: 3, concurrency: 5 };
+    expect((await post({ texts: texts(3), settings })).status).toBe(400);
+    expect((await post({ texts: ["abcd"], settings })).status).toBe(400);
+  });
+
+  it("rejects malformed settings", async () => {
+    expect((await post({ texts: ["a"], settings: { maxTexts: 0, maxTextLength: 500, concurrency: 5 } })).status).toBe(400);
+    expect((await post({ texts: ["a"], settings: "fast" })).status).toBe(400);
+  });
+
+  it("reads the ceilings from env", async () => {
+    vi.stubEnv("AI_MAX_TEXTS", "3");
+    expect((await post({ texts: texts(4) })).status).toBe(400);
+    expect((await post({ texts: texts(4), settings: { maxTexts: 50, maxTextLength: 500, concurrency: 5 } })).status).toBe(400);
+  });
+});
+
+describe("GET /api/ai", () => {
+  it("returns the server ceilings without calling OpenAI", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("AI_MAX_CONCURRENCY", "2");
+    const response = await GET();
+    expect(await response.json()).toEqual({ limits: { maxTexts: 50, maxTextLength: 500, concurrency: 2 } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores invalid env values", async () => {
+    vi.stubEnv("AI_MAX_TEXTS", "lots");
+    vi.stubEnv("AI_MAX_TEXT_LENGTH", "0");
+    expect(await (await GET()).json()).toEqual({ limits: { maxTexts: 50, maxTextLength: 500, concurrency: 5 } });
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { fetchAiOutcomes } from "./aiClient";
+import { DEFAULT_AI_SETTINGS } from "./aiSettings";
 
 import type { Mock } from "vitest";
 
@@ -16,7 +17,7 @@ describe("fetchAiOutcomes", () => {
     });
     const texts = Array.from({ length: 52 }, (_, i) => (i === 0 ? "y".repeat(600) : `t${i}`));
 
-    const outcomes = await fetchAiOutcomes(texts, fetchFn);
+    const outcomes = await fetchAiOutcomes(texts, DEFAULT_AI_SETTINGS, fetchFn);
 
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(fetchFn.mock.calls[0][0]).toBe("/api/ai");
@@ -33,12 +34,12 @@ describe("fetchAiOutcomes", () => {
     const fetchFn = vi.fn<typeof fetch>(async () =>
       Response.json({ results: [{ date: null, note: "AI không xác định được" }] }),
     );
-    expect(await fetchAiOutcomes(["a"], fetchFn)).toEqual([{ date: null, note: "AI không xác định được" }]);
+    expect(await fetchAiOutcomes(["a"], DEFAULT_AI_SETTINGS, fetchFn)).toEqual([{ date: null, note: "AI không xác định được" }]);
   });
 
   it("marks every sent text when AI is disabled", async () => {
     const fetchFn = vi.fn<typeof fetch>(async () => Response.json({ error: "ai_disabled" }, { status: 503 }));
-    expect(await fetchAiOutcomes(["a", "b"], fetchFn)).toEqual([
+    expect(await fetchAiOutcomes(["a", "b"], DEFAULT_AI_SETTINGS, fetchFn)).toEqual([
       { date: null, note: "AI chưa được bật" },
       { date: null, note: "AI chưa được bật" },
     ]);
@@ -48,15 +49,28 @@ describe("fetchAiOutcomes", () => {
     const failing = vi.fn<typeof fetch>(async () => {
       throw new Error("offline");
     });
-    expect(await fetchAiOutcomes(["a"], failing)).toEqual([{ date: null, note: "Không gọi được AI" }]);
+    expect(await fetchAiOutcomes(["a"], DEFAULT_AI_SETTINGS, failing)).toEqual([{ date: null, note: "Không gọi được AI" }]);
 
     const malformed = vi.fn<typeof fetch>(async () => Response.json({ results: [] }));
-    expect(await fetchAiOutcomes(["a"], malformed)).toEqual([{ date: null, note: "Không gọi được AI" }]);
+    expect(await fetchAiOutcomes(["a"], DEFAULT_AI_SETTINGS, malformed)).toEqual([{ date: null, note: "Không gọi được AI" }]);
+  });
+
+  it("applies the browser settings and sends them with the data", async () => {
+    const fetchFn = vi.fn<typeof fetch>(async (_url, init) => {
+      const { texts } = JSON.parse(String(init?.body)) as { texts: string[] };
+      return Response.json({ results: texts.map(() => ({ date: "2025-05-02" })) });
+    });
+    const settings = { maxTexts: 2, maxTextLength: 3, concurrency: 1 };
+
+    const outcomes = await fetchAiOutcomes(["abcdef", "b", "c"], settings, fetchFn);
+
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body))).toEqual({ texts: ["abc", "b"], settings });
+    expect(outcomes[2]).toEqual({ date: null, note: "Vượt giới hạn AI (2 dòng)" });
   });
 
   it("does not call the route when there is nothing to ask", async () => {
     const fetchFn = vi.fn<typeof fetch>();
-    expect(await fetchAiOutcomes([], fetchFn)).toEqual([]);
+    expect(await fetchAiOutcomes([], DEFAULT_AI_SETTINGS, fetchFn)).toEqual([]);
     expect(fetchFn).not.toHaveBeenCalled();
   });
 });

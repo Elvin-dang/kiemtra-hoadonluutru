@@ -1,6 +1,6 @@
 import { extractCheckout, toIsoDate } from "@/features/invoice-check/utils/checkout";
 
-import type { AiResponseItem } from "@/features/invoice-check/types/invoice";
+import type { AiResponseItem, AiSettings } from "@/features/invoice-check/types/invoice";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -8,9 +8,9 @@ export const maxDuration = 300;
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const PROMPT =
   "Trích xuất ngày kết thúc dịch vụ/check-out từ thông tin lưu trú. Chỉ trả về DD/MM/YYYY hoặc KHONG_XAC_DINH.";
-const MAX_TEXTS = 50;
-const MAX_TEXT_LENGTH = 500;
-const CONCURRENCY = 5;
+// Server ceilings (override with AI_MAX_TEXTS / AI_MAX_TEXT_LENGTH / AI_MAX_CONCURRENCY).
+// Clients may ask for less, never more: this route is public.
+const DEFAULT_LIMITS: AiSettings = { maxTexts: 50, maxTextLength: 500, concurrency: 5 };
 const TIMEOUT_MS = 15_000;
 // Caps cost per call on this public route; includes reasoning tokens on reasoning models, so not too small.
 const MAX_OUTPUT_TOKENS = 1000;
@@ -18,12 +18,44 @@ const MAX_OUTPUT_TOKENS = 1000;
 type ResponsesPayload = { output?: { content?: { type?: string; text?: string }[] }[] };
 type OpenAiErrorPayload = { error?: { message?: string; type?: string; code?: string | null } };
 
-function parseTexts(body: unknown): string[] | null {
+function positiveIntEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= 1 ? value : fallback;
+}
+
+function readLimits(): AiSettings {
+  return {
+    maxTexts: positiveIntEnv("AI_MAX_TEXTS", DEFAULT_LIMITS.maxTexts),
+    maxTextLength: positiveIntEnv("AI_MAX_TEXT_LENGTH", DEFAULT_LIMITS.maxTextLength),
+    concurrency: positiveIntEnv("AI_MAX_CONCURRENCY", DEFAULT_LIMITS.concurrency),
+  };
+}
+
+function isPositiveInt(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+
+// Effective limits = min(client setting, server ceiling). No settings → the ceilings.
+function effectiveLimits(settings: unknown, limits: AiSettings): AiSettings | null {
+  if (settings === undefined) return limits;
+  if (typeof settings !== "object" || settings === null) return null;
+  const requested = settings as Record<string, unknown>;
+  const result = { ...limits };
+  for (const field of ["maxTexts", "maxTextLength", "concurrency"] as const) {
+    const value = requested[field];
+    if (!isPositiveInt(value)) return null;
+    result[field] = Math.min(value, limits[field]);
+  }
+  return result;
+}
+
+function parseRequest(body: unknown, limits: AiSettings): { texts: string[]; concurrency: number } | null {
   if (typeof body !== "object" || body === null || !("texts" in body)) return null;
   const { texts } = body;
-  if (!Array.isArray(texts) || texts.length < 1 || texts.length > MAX_TEXTS) return null;
-  const isValid = texts.every((t) => typeof t === "string" && t.length >= 1 && t.length <= MAX_TEXT_LENGTH);
-  return isValid ? (texts as string[]) : null;
+  const effective = effectiveLimits("settings" in body ? body.settings : undefined, limits);
+  if (!effective || !Array.isArray(texts) || texts.length < 1 || texts.length > effective.maxTexts) return null;
+  const isValid = texts.every((t) => typeof t === "string" && t.length >= 1 && t.length <= effective.maxTextLength);
+  return isValid ? { texts: texts as string[], concurrency: effective.concurrency } : null;
 }
 
 function outputText(payload: unknown): string {
@@ -93,13 +125,18 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     return Response.json({ error: "invalid_request" }, { status: 400 });
   }
-  const texts = parseTexts(body);
-  if (!texts) return Response.json({ error: "invalid_request" }, { status: 400 });
+  const parsed = parseRequest(body, readLimits());
+  if (!parsed) return Response.json({ error: "invalid_request" }, { status: 400 });
+  const { texts, concurrency } = parsed;
 
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL;
   if (!apiKey || !model) return Response.json({ error: "ai_disabled" }, { status: 503 });
 
-  const results = await mapWithConcurrency(texts, CONCURRENCY, (text) => askOne(text, apiKey, model));
+  const results = await mapWithConcurrency(texts, concurrency, (text) => askOne(text, apiKey, model));
   return Response.json({ results });
+}
+
+export async function GET(): Promise<Response> {
+  return Response.json({ limits: readLimits() });
 }
