@@ -1,4 +1,4 @@
-import type { ColumnMapping, MappingField } from "../types/invoice";
+import type { ColumnMapping, MappingField } from "./types";
 
 export const MAPPING_FIELDS: { field: MappingField; label: string; isRequired: boolean; aliases: string[] }[] = [
   { field: "invoiceNo", label: "Số hóa đơn", isRequired: true, aliases: ["Số hóa đơn"] },

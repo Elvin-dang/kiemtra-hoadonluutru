@@ -1,6 +1,6 @@
-import { extractCheckout, toIsoDate } from "@/features/invoice-check/utils/checkout";
+import { extractCheckout, toIsoDate } from "@kiemtra/core";
 
-import type { AiResponseItem, AiLimits } from "@/features/invoice-check/types/invoice";
+import type { AiResponseItem, AiLimits } from "@kiemtra/core";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;

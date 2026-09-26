@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { DEFAULT_AI_SETTINGS, loadSettings, sanitizeSettings, saveSettings } from "../utils/aiSettings";
+import { DEFAULT_AI_SETTINGS, loadSettings, sanitizeSettings, saveSettings } from "@kiemtra/core";
 
-import type { AiLimits, AiSettings } from "../types/invoice";
+import type { AiLimits, AiSettings } from "@kiemtra/core";
 
 const NO_LIMIT: AiLimits = {
   maxTexts: Number.MAX_SAFE_INTEGER,

@@ -2,14 +2,14 @@ import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from "lucide-react";
 import { cn } from "cn";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/components/ui/table";
-import { formatDate } from "@/shared/utils/formatDate";
+import { formatDate } from "@kiemtra/core";
 
-import { cellText } from "../utils/tableColumns";
+import { cellText } from "@kiemtra/core";
 
 import type { KeyboardEvent } from "react";
-import type { RowResult, Status } from "../types/invoice";
-import type { ColumnId, TableColumn } from "../utils/tableColumns";
-import type { SortState } from "../utils/tableView";
+import type { RowResult, Status } from "@kiemtra/core";
+import type { ColumnId, TableColumn } from "@kiemtra/core";
+import type { SortState } from "@kiemtra/core";
 
 type ResultTableProps = {
   rows: RowResult[];

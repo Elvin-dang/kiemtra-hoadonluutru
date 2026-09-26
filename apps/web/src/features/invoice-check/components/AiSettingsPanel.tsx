@@ -6,7 +6,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Switch } from "@/shared/components/ui/switch";
 
-import type { AiLimits, AiSettings } from "../types/invoice";
+import type { AiLimits, AiSettings } from "@kiemtra/core";
 
 type AiSettingsPanelProps = {
   settings: AiSettings;

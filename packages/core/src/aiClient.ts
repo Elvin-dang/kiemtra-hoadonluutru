@@ -1,7 +1,7 @@
 import { DEFAULT_AI_SETTINGS } from "./aiSettings";
 import { fromIsoDate } from "./checkout";
 
-import type { AiLimits, AiOutcome, AiResponseItem, AiSettings } from "../types/invoice";
+import type { AiLimits, AiOutcome, AiResponseItem, AiSettings } from "./types";
 
 const AI_ROUTE = "/api/ai";
 const DISABLED: AiOutcome = { date: null, note: "AI chưa được bật" };

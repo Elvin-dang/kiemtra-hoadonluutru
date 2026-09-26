@@ -1,4 +1,4 @@
-import type { AiLimits, AiSettings } from "../types/invoice";
+import type { AiLimits, AiSettings } from "./types";
 
 export const DEFAULT_AI_SETTINGS: AiSettings = { isEnabled: true, maxTexts: 50, maxTextLength: 500, concurrency: 5 };
 

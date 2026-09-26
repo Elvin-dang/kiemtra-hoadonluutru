@@ -1,6 +1,6 @@
 import { extractCheckout, toDate } from "./checkout";
 
-import type { AiOutcome, AnalysisResult, Counts, InputRow, Method, RowResult, Status } from "../types/invoice";
+import type { AiOutcome, AnalysisResult, Counts, InputRow, Method, RowResult, Status } from "./types";
 
 const DAY_MS = 86_400_000;
 

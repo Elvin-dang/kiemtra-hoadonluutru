@@ -4,23 +4,16 @@ import { useCallback, useState } from "react";
 
 import { saveFile } from "@/shared/utils/saveFile";
 
-import { fetchAiOutcomes } from "../utils/aiClient";
-import { analyze, needsAi } from "../utils/analyze";
-import { InputError } from "../utils/inputError";
+import { fetchAiOutcomes, resultTemplate } from "@kiemtra/core";
+import { analyze, needsAi } from "@kiemtra/core";
+import { InputError } from "@kiemtra/core";
 
-import type { AiSettings, AnalysisResult, ColumnMapping, SheetColumn } from "../types/invoice";
-import type { InputErrorCode } from "../utils/inputError";
+import type { AiSettings, AnalysisResult, ColumnMapping, SheetColumn } from "@kiemtra/core";
+import type { InputErrorCode } from "@kiemtra/core";
 import type ExcelJS from "exceljs";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const RESULT_TEMPLATE_URL = "/templates/ket-qua-ai.xlsx";
-
-async function loadResultTemplate(): Promise<ArrayBuffer> {
-  const response = await fetch(RESULT_TEMPLATE_URL);
-  if (!response.ok) throw new Error(`Cannot load ${RESULT_TEMPLATE_URL}: HTTP ${response.status}`);
-  return response.arrayBuffer();
-}
 
 const ERROR_MESSAGES: Record<InputErrorCode | "too_large" | "unexpected", string> = {
   unreadable: "Không đọc được file Excel.",
@@ -58,7 +51,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
   const runAnalysis = useCallback(async (fileName: string, workbook: ExcelJS.Workbook, mapping: ColumnMapping) => {
     setState({ phase: "processing", fileName });
     try {
-      const { readRows, writeResult } = await import("../utils/workbook");
+      const { readRows, writeResult } = await import("@kiemtra/core/workbook");
       const input = readRows(workbook, mapping);
       const aiIndices = needsAi(input.rows);
       const outcomes = await fetchAiOutcomes(
@@ -67,7 +60,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       );
       const ai = new Map(aiIndices.map((rowIndex, k) => [rowIndex, outcomes[k]]));
       const analysis = analyze(input.rows, input.threshold, ai);
-      const output = await writeResult(await loadResultTemplate(), analysis, fileName);
+      const output = await writeResult(resultTemplate(), analysis, fileName);
       setState({ phase: "done", runId: Date.now(), fileName, analysis, output });
     } catch (error) {
       setState({ phase: "error", message: errorMessage(error) });
@@ -82,7 +75,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       }
       setState({ phase: "processing", fileName: file.name });
       try {
-        const { inspectInput } = await import("../utils/workbook");
+        const { inspectInput } = await import("@kiemtra/core/workbook");
         const inspected = await inspectInput(await file.arrayBuffer());
         if (inspected.isComplete) {
           await runAnalysis(file.name, inspected.workbook, inspected.mapping);

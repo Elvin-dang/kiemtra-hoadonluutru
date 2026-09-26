@@ -1,7 +1,7 @@
 import { cn } from "cn";
 
-import type { Counts } from "../types/invoice";
-import type { StatusFilter } from "../utils/tableView";
+import type { Counts } from "@kiemtra/core";
+import type { StatusFilter } from "@kiemtra/core";
 
 type SummaryTilesProps = {
   counts: Counts;

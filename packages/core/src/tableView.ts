@@ -1,9 +1,9 @@
-import { formatDate } from "@/shared/utils/formatDate";
+import { formatDate } from "./formatDate";
 
 import { normalizeHeader } from "./columns";
 import { cellText, TABLE_COLUMNS } from "./tableColumns";
 
-import type { RowResult, Status } from "../types/invoice";
+import type { RowResult, Status } from "./types";
 import type { ColumnId, SortValue } from "./tableColumns";
 
 export type StatusFilter = Status | "all";

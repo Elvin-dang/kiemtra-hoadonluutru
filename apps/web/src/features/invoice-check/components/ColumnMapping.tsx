@@ -6,9 +6,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/shared/components/ui/aler
 import { Button } from "@/shared/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/shared/components/ui/native-select";
 
-import { MAPPING_FIELDS, validateMapping } from "../utils/columns";
+import { MAPPING_FIELDS, validateMapping } from "@kiemtra/core";
 
-import type { ColumnMapping as Mapping, MappingField, SheetColumn } from "../types/invoice";
+import type { ColumnMapping as Mapping, MappingField, SheetColumn } from "@kiemtra/core";
 
 type ColumnMappingProps = {
   fileName: string;

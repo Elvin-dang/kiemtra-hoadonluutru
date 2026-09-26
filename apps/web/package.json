@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "@kiemtra/core": "*",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "exceljs": "^4.4.0",

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_VISIBLE_COLUMNS, TABLE_COLUMNS } from "./tableColumns";
 import { filterRows, nextSort, paginate, sortRows } from "./tableView";
 
-import type { RowResult } from "../types/invoice";
+import type { RowResult } from "./types";
 
 const d = (y: number, m: number, day: number) => new Date(Date.UTC(y, m - 1, day));
 

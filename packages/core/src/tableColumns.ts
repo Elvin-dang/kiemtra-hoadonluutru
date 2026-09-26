@@ -1,6 +1,6 @@
-import { formatDate } from "@/shared/utils/formatDate";
+import { formatDate } from "./formatDate";
 
-import type { CellValue, RowResult, Status } from "../types/invoice";
+import type { CellValue, RowResult, Status } from "./types";
 
 export type ColumnId =
   | "stt"

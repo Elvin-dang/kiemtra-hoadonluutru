@@ -5,9 +5,9 @@ import { ArrowDownIcon, ArrowUpIcon, Columns3Icon } from "lucide-react";
 import { Button, buttonVariants } from "@/shared/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 
-import { TABLE_COLUMNS } from "../utils/tableColumns";
+import { TABLE_COLUMNS } from "@kiemtra/core";
 
-import type { ColumnId } from "../utils/tableColumns";
+import type { ColumnId } from "@kiemtra/core";
 
 type ColumnMenuProps = {
   columnOrder: ColumnId[];

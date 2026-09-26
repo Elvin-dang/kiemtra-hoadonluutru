@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { formatDate } from "@/shared/utils/formatDate";
+import { formatDate } from "./formatDate";
 
 import { analyze, needsAi } from "./analyze";
 import { inspectInput, readRows } from "./workbook";
 
-import type { InputRow } from "../types/invoice";
+import type { InputRow } from "./types";
 
 const d = (y: number, m: number, day: number) => new Date(Date.UTC(y, m - 1, day));
 

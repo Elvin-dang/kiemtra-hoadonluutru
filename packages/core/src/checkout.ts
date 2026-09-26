@@ -1,4 +1,4 @@
-import type { CellValue } from "../types/invoice";
+import type { CellValue } from "./types";
 
 const TOKEN = /\d+|\D+/g;
 const DIGITS = /^\d+$/;

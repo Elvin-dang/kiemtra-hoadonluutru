@@ -1,11 +1,11 @@
 import ExcelJS from "exceljs";
 
-import { formatDate } from "@/shared/utils/formatDate";
+import { formatDate } from "./formatDate";
 
 import { suggestMapping } from "./columns";
 import { InputError } from "./inputError";
 
-import type { AnalysisResult, CellValue, ColumnMapping, InputRow, SheetColumn, Status } from "../types/invoice";
+import type { AnalysisResult, CellValue, ColumnMapping, InputRow, SheetColumn, Status } from "./types";
 
 export const MAX_ROWS = 5000;
 // The e-invoice "bán ra" export; any first sheet with the same headers also works.

@@ -7,7 +7,7 @@ import { analyze } from "./analyze";
 import { InputError } from "./inputError";
 import { MAX_ROWS, inspectInput, readRows, writeResult } from "./workbook";
 
-import type { ColumnMapping } from "../types/invoice";
+import type { ColumnMapping } from "./types";
 
 function bytes(path: string): ArrayBuffer {
   const buffer = readFileSync(path);
@@ -15,7 +15,7 @@ function bytes(path: string): ArrayBuffer {
 }
 
 const fixture = () => bytes("fixtures/br-chitiet.xlsx"); // anonymised copy of a real "XUAT HDDT BAN RA" export
-const template = () => bytes("public/templates/ket-qua-ai.xlsx");
+const template = () => bytes("templates/ket-qua-ai.xlsx");
 
 const BR_HEADERS = ["Số hóa đơn", "Ngày hóa đơn", "Tên người mua", "Họ tên người mua hàng", "MST người mua", "Tên hàng hóa, dịch vụ"];
 
