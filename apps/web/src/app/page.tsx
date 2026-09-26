@@ -1,5 +1,5 @@
-import { InvoiceCheck } from "@/features/invoice-check";
+import { WebApp } from "@/WebApp";
 
 export default function Page() {
-  return <InvoiceCheck />;
+  return <WebApp />;
 }

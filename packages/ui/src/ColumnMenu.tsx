@@ -2,8 +2,8 @@
 
 import { ArrowDownIcon, ArrowUpIcon, Columns3Icon } from "lucide-react";
 
-import { Button, buttonVariants } from "@/shared/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
+import { Button, buttonVariants } from "./components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
 
 import { TABLE_COLUMNS } from "@kiemtra/core";
 

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 
-import { Button } from "@/shared/components/ui/button";
-import { Input } from "@/shared/components/ui/input";
-import { Switch } from "@/shared/components/ui/switch";
+import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
+import { Switch } from "./components/ui/switch";
 
 import type { AiLimits, AiSettings } from "@kiemtra/core";
 

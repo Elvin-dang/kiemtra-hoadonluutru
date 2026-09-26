@@ -1,26 +1,30 @@
 "use client";
 
-import { Alert, AlertDescription } from "@/shared/components/ui/alert";
-import { Button } from "@/shared/components/ui/button";
-import { Input } from "@/shared/components/ui/input";
-
-import { useAiSettings } from "../hooks/useAiSettings";
-import { useInvoiceCheck } from "../hooks/useInvoiceCheck";
 import { AiSettingsPanel } from "./AiSettingsPanel";
 import { ColumnMapping } from "./ColumnMapping";
+import { Alert, AlertDescription } from "./components/ui/alert";
+import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
+import { usePlatform } from "./platform";
 import { ResultsView } from "./ResultsView";
+import { useAiSettings } from "./useAiSettings";
+import { useInvoiceCheck } from "./useInvoiceCheck";
 
 import type { ChangeEvent } from "react";
 
 export function InvoiceCheck() {
+  const platform = usePlatform();
   const ai = useAiSettings();
-  const { state, handleFile, handleConfirmMapping, handleCancel, handleDownload } = useInvoiceCheck(ai.settings);
+  const { state, savedTo, saveError, handleFile, handleConfirmMapping, handleCancel, handleSave } = useInvoiceCheck(
+    ai.settings,
+  );
   const isProcessing = state.phase === "processing";
 
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) void handleFile(file);
-    event.target.value = "";
+  const handleChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = "";
+    if (file) await handleFile({ name: file.name, path: null, data: await file.arrayBuffer() });
   };
 
   return (
@@ -30,9 +34,7 @@ export function InvoiceCheck() {
         <p className="text-muted-foreground">
           Tải lên file Excel xuất hóa đơn điện tử bán ra. Hệ thống tìm ngày check-out và cảnh báo hóa đơn lập trễ.
         </p>
-        <p className="text-sm text-muted-foreground">
-          Dữ liệu được xử lý ngay trên máy của bạn. Chỉ nội dung lưu trú không đọc được mới được gửi tới AI.
-        </p>
+        <p className="text-sm text-muted-foreground">{platform.privacyNotice}</p>
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -42,10 +44,19 @@ export function InvoiceCheck() {
           aria-label="Chọn file Excel"
           className="max-w-sm"
           disabled={isProcessing}
-          onChange={handleChange}
+          onChange={(event) => void handleChange(event)}
         />
-        {state.phase === "done" && <Button onClick={handleDownload}>Tải kết quả</Button>}
+        {state.phase === "done" && (
+          <Button onClick={() => void handleSave()}>{platform.kind === "desktop" ? "Lưu kết quả" : "Tải kết quả"}</Button>
+        )}
       </div>
+
+      {savedTo && <p className="text-sm text-green-700">Đã lưu: {savedTo}</p>}
+      {saveError && (
+        <Alert variant="destructive">
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
 
       <AiSettingsPanel
         settings={ai.settings}
@@ -58,8 +69,8 @@ export function InvoiceCheck() {
 
       {state.phase === "mapping" && (
         <ColumnMapping
-          key={state.fileName}
-          fileName={state.fileName}
+          key={state.source.name}
+          fileName={state.source.name}
           columns={state.columns}
           initialMapping={state.mapping}
           onConfirm={handleConfirmMapping}

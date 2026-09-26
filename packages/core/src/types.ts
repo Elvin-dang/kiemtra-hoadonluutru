@@ -48,3 +48,12 @@ export type AiLimits = { maxTexts: number; maxTextLength: number; concurrency: n
 
 // Per-browser AI preferences, saved in localStorage.
 export type AiSettings = AiLimits & { isEnabled: boolean };
+
+// What a platform answers for one batch of texts sent to AI.
+export type AiAnswer =
+  | { status: "ok"; results: AiResponseItem[] }
+  | { status: "disabled"; note?: string }
+  | { status: "failed" };
+
+// Sends one batch (≤ 50 texts) to AI: the web posts to /api/ai, the desktop calls Rust.
+export type AskAi = (texts: string[], limits: AiLimits) => Promise<AiAnswer>;

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 
-import { Alert, AlertDescription, AlertTitle } from "@/shared/components/ui/alert";
-import { Button } from "@/shared/components/ui/button";
-import { NativeSelect, NativeSelectOption } from "@/shared/components/ui/native-select";
+import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
+import { Button } from "./components/ui/button";
+import { NativeSelect, NativeSelectOption } from "./components/ui/native-select";
 
 import { MAPPING_FIELDS, validateMapping } from "@kiemtra/core";
 

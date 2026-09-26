@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { DEFAULT_AI_SETTINGS, loadSettings, sanitizeSettings, saveSettings } from "@kiemtra/core";
 
+import { usePlatform } from "./platform";
+
 import type { AiLimits, AiSettings } from "@kiemtra/core";
 
 const NO_LIMIT: AiLimits = {
@@ -16,33 +18,27 @@ function numericLimits({ maxTexts, maxTextLength, concurrency }: AiLimits): AiLi
   return { maxTexts, maxTextLength, concurrency };
 }
 
-async function fetchServerLimits(): Promise<AiLimits> {
-  try {
-    const response = await fetch("/api/ai");
-    if (!response.ok) return numericLimits(DEFAULT_AI_SETTINGS);
-    const { limits } = (await response.json()) as { limits?: unknown };
-    return numericLimits(sanitizeSettings(limits, NO_LIMIT));
-  } catch {
-    return numericLimits(DEFAULT_AI_SETTINGS);
-  }
-}
-
 export function useAiSettings() {
+  const platform = usePlatform();
   const [limits, setLimits] = useState<AiLimits>(() => numericLimits(DEFAULT_AI_SETTINGS));
   const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
 
   // localStorage is read after mount (not during render) so server and client HTML match.
   useEffect(() => {
     let isActive = true;
-    void fetchServerLimits().then((serverLimits) => {
-      if (!isActive) return;
-      setLimits(serverLimits);
-      setSettings(loadSettings(serverLimits));
-    });
+    void platform
+      .getAiLimits()
+      .then((raw) => numericLimits(sanitizeSettings(raw, NO_LIMIT)))
+      .catch(() => numericLimits(DEFAULT_AI_SETTINGS))
+      .then((platformLimits) => {
+        if (!isActive) return;
+        setLimits(platformLimits);
+        setSettings(loadSettings(platformLimits));
+      });
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [platform]);
 
   const updateSettings = useCallback(
     (next: AiSettings) => {

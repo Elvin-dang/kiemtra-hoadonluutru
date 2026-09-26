@@ -3,21 +3,27 @@
 import { useMemo, useState } from "react";
 import { SearchIcon, XIcon } from "lucide-react";
 
-import { Button } from "@/shared/components/ui/button";
-import { Input } from "@/shared/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/shared/components/ui/native-select";
+import {
+  DEFAULT_TABLE_PREFS,
+  filterRows,
+  loadTablePrefs,
+  moveColumn,
+  nextSort,
+  PAGE_SIZES,
+  paginate,
+  saveTablePrefs,
+  sortRows,
+  TABLE_COLUMNS,
+} from "@kiemtra/core";
 
-import { TABLE_COLUMNS } from "@kiemtra/core";
-import { DEFAULT_TABLE_PREFS, PAGE_SIZES, loadTablePrefs, moveColumn, saveTablePrefs } from "@kiemtra/core";
-import { filterRows, nextSort, paginate, sortRows } from "@kiemtra/core";
 import { ColumnMenu } from "./ColumnMenu";
+import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
+import { NativeSelect, NativeSelectOption } from "./components/ui/native-select";
 import { ResultTable } from "./ResultTable";
 import { SummaryTiles } from "./SummaryTiles";
 
-import type { AnalysisResult } from "@kiemtra/core";
-import type { ColumnId } from "@kiemtra/core";
-import type { TablePrefs } from "@kiemtra/core";
-import type { SortState, StatusFilter } from "@kiemtra/core";
+import type { AnalysisResult, ColumnId, SortState, StatusFilter, TablePrefs } from "@kiemtra/core";
 
 type ResultsViewProps = { analysis: AnalysisResult };
 
