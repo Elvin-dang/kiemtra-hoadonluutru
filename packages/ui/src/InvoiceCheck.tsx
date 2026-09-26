@@ -17,23 +17,22 @@ import type { ChangeEvent } from "react";
 export function InvoiceCheck() {
   const platform = usePlatform();
   const ai = useAiSettings();
-  const { state, savedTo, saveError, handleFile, handleConfirmMapping, handleCancel, handleSave, handleSaveAs } =
+  const { state, savedTo, saveError, openFile, handleConfirmMapping, handleCancel, handleSave, handleSaveAs } =
     useInvoiceCheck(ai.settings);
   const isProcessing = state.phase === "processing";
 
-  const handleChange = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.target;
     const file = input.files?.[0];
     input.value = "";
-    if (file) await handleFile({ name: file.name, path: null, data: await file.arrayBuffer() });
+    if (file) void openFile(file.arrayBuffer().then((data) => ({ name: file.name, path: null, data })));
   };
 
   // Desktop: files dropped on the window or passed at launch.
-  useEffect(() => platform.onExternalFile?.((file) => void handleFile(file)), [platform, handleFile]);
+  useEffect(() => platform.onExternalFile?.((file) => void openFile(file)), [platform, openFile]);
 
-  const handlePick = async () => {
-    const file = await platform.pickFile?.();
-    if (file) await handleFile(file);
+  const handlePick = () => {
+    if (platform.pickFile) void openFile(platform.pickFile());
   };
 
   return (
@@ -48,7 +47,7 @@ export function InvoiceCheck() {
 
       <div className="flex flex-wrap items-center gap-3">
         {platform.pickFile ? (
-          <Button variant="outline" disabled={isProcessing} onClick={() => void handlePick()}>
+          <Button variant="outline" disabled={isProcessing} onClick={handlePick}>
             Chọn file Excel
           </Button>
         ) : (

@@ -93,6 +93,20 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
     [runAnalysis],
   );
 
+  const openFile = useCallback(
+    async (pending: Promise<SourceFile | null>) => {
+      setState({ phase: "processing", fileName: "" });
+      try {
+        const file = await pending;
+        if (file) await handleFile(file);
+        else setState({ phase: "idle" });
+      } catch (error) {
+        setState({ phase: "error", message: typeof error === "string" ? error : ERROR_MESSAGES.unreadable });
+      }
+    },
+    [handleFile],
+  );
+
   const handleConfirmMapping = useCallback(
     (mapping: ColumnMapping) => {
       if (state.phase !== "mapping") return;
@@ -125,5 +139,5 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
     }
   }, [state, platform]);
 
-  return { state, savedTo, saveError, handleFile, handleConfirmMapping, handleCancel, handleSave, handleSaveAs };
+  return { state, savedTo, saveError, openFile, handleConfirmMapping, handleCancel, handleSave, handleSaveAs };
 }

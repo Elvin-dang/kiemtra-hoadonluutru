@@ -23,6 +23,14 @@ async function readSource(path: string): Promise<SourceFile> {
   return { name: baseName(path), path, data };
 }
 
+// Rust hands the launch file out once only; cache the request so every subscriber
+// (StrictMode's double-mount included) awaits the same answer instead of asking again.
+let startupFile: Promise<string | null> | null = null;
+function getStartupFile(): Promise<string | null> {
+  startupFile ??= invoke<string | null>("startup_file");
+  return startupFile;
+}
+
 function toBytes(data: ArrayBuffer): number[] {
   return Array.from(new Uint8Array(data));
 }
@@ -54,18 +62,19 @@ export const desktopPlatform: Platform = {
   onExternalFile: (handler) => {
     let isActive = true;
     let unlisten: () => void = () => {};
+    // Register the drop listener first, so a startup-file failure can never block it.
     void (async () => {
-      // The launch file is handed out once (Rust takes it), so a remount cannot open it twice.
-      const startup = await invoke<string | null>("startup_file");
-      if (startup && isActive) handler(await readSource(startup));
       const stop = await getCurrentWebview().onDragDropEvent((event) => {
         if (event.payload.type !== "drop") return;
         const path = event.payload.paths.find((candidate) => EXCEL_PATH.test(candidate));
-        if (path) void readSource(path).then(handler);
+        if (path) handler(readSource(path));
       });
       if (isActive) unlisten = stop;
       else stop();
     })();
+    void getStartupFile().then((path) => {
+      if (path && isActive) handler(readSource(path));
+    });
     return () => {
       isActive = false;
       unlisten();

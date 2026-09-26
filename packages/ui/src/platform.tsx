@@ -18,7 +18,7 @@ export type Platform = {
 
   // Desktop-only capabilities; the web leaves them undefined.
   pickFile?: () => Promise<SourceFile | null>;
-  onExternalFile?: (handler: (file: SourceFile) => void) => () => void;
+  onExternalFile?: (handler: (file: Promise<SourceFile>) => void) => () => void;
   saveResultAs?: (data: ArrayBuffer, fileName: string) => Promise<SaveOutcome>;
   revealFile?: (path: string) => Promise<void>;
   aiKey?: {
