@@ -5,8 +5,10 @@ import { SearchIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/shared/components/ui/native-select";
 
-import { DEFAULT_VISIBLE_COLUMNS, TABLE_COLUMNS } from "../utils/tableColumns";
+import { TABLE_COLUMNS } from "../utils/tableColumns";
+import { DEFAULT_TABLE_PREFS, PAGE_SIZES, loadTablePrefs, moveColumn, saveTablePrefs } from "../utils/tablePrefs";
 import { filterRows, nextSort, paginate, sortRows } from "../utils/tableView";
 import { ColumnMenu } from "./ColumnMenu";
 import { ResultTable } from "./ResultTable";
@@ -14,25 +16,34 @@ import { SummaryTiles } from "./SummaryTiles";
 
 import type { AnalysisResult } from "../types/invoice";
 import type { ColumnId } from "../utils/tableColumns";
+import type { TablePrefs } from "../utils/tablePrefs";
 import type { SortState, StatusFilter } from "../utils/tableView";
 
 type ResultsViewProps = { analysis: AnalysisResult };
 
-const PAGE_SIZE = 50;
+const COLUMNS_BY_ID = new Map(TABLE_COLUMNS.map((column) => [column.id, column]));
 
 export function ResultsView({ analysis }: ResultsViewProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(1);
-  const [visibleColumns, setVisibleColumns] = useState<ColumnId[]>(DEFAULT_VISIBLE_COLUMNS);
+  // Only rendered after an upload (never on the server), so reading localStorage here is safe.
+  const [prefs, setPrefs] = useState<TablePrefs>(() => loadTablePrefs());
   const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set());
 
   const view = useMemo(
-    () => paginate(sortRows(filterRows(analysis.results, statusFilter, search), sort), page, PAGE_SIZE),
-    [analysis.results, statusFilter, search, sort, page],
+    () => paginate(sortRows(filterRows(analysis.results, statusFilter, search), sort), page, prefs.pageSize),
+    [analysis.results, statusFilter, search, sort, page, prefs.pageSize],
   );
-  const columns = TABLE_COLUMNS.filter((column) => visibleColumns.includes(column.id));
+  const columns = prefs.columnOrder
+    .filter((id) => prefs.visibleColumns.includes(id))
+    .flatMap((id) => COLUMNS_BY_ID.get(id) ?? []);
+
+  const updatePrefs = (next: TablePrefs) => {
+    setPrefs(next);
+    saveTablePrefs(next);
+  };
 
   const handleFilter = (filter: StatusFilter) => {
     setStatusFilter((current) => (current === filter ? "all" : filter));
@@ -47,9 +58,21 @@ export function ResultsView({ analysis }: ResultsViewProps) {
     setPage(1);
   };
   const handleToggleColumn = (column: ColumnId) => {
-    setVisibleColumns((current) =>
-      current.includes(column) ? current.filter((id) => id !== column) : [...current, column],
-    );
+    const visible = prefs.visibleColumns;
+    updatePrefs({
+      ...prefs,
+      visibleColumns: visible.includes(column) ? visible.filter((id) => id !== column) : [...visible, column],
+    });
+  };
+  const handleMoveColumn = (column: ColumnId, direction: -1 | 1) => {
+    updatePrefs({ ...prefs, columnOrder: moveColumn(prefs.columnOrder, column, direction) });
+  };
+  const handleResetColumns = () => {
+    updatePrefs({ ...prefs, columnOrder: DEFAULT_TABLE_PREFS.columnOrder, visibleColumns: DEFAULT_TABLE_PREFS.visibleColumns });
+  };
+  const handlePageSize = (value: string) => {
+    updatePrefs({ ...prefs, pageSize: PAGE_SIZES.find((size) => String(size) === value) ?? DEFAULT_TABLE_PREFS.pageSize });
+    setPage(1);
   };
   const handleToggleRow = (stt: number) => {
     setExpandedRows((current) => {
@@ -83,7 +106,13 @@ export function ResultsView({ analysis }: ResultsViewProps) {
           </Button>
         )}
         <div className="sm:ml-auto">
-          <ColumnMenu visibleColumns={visibleColumns} onToggle={handleToggleColumn} />
+          <ColumnMenu
+            columnOrder={prefs.columnOrder}
+            visibleColumns={prefs.visibleColumns}
+            onToggle={handleToggleColumn}
+            onMove={handleMoveColumn}
+            onReset={handleResetColumns}
+          />
         </div>
       </div>
 
@@ -101,24 +130,41 @@ export function ResultsView({ analysis }: ResultsViewProps) {
           {view.total === 0 ? "0 dòng" : `${view.from}–${view.to} / ${view.total} dòng`}
           {view.total !== analysis.results.length && ` (lọc từ ${analysis.results.length})`}
         </span>
-        {view.pageCount > 1 && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={view.page === 1} onClick={() => setPage(view.page - 1)}>
-              ‹ Trước
-            </Button>
-            <span>
-              Trang {view.page}/{view.pageCount}
-            </span>
-            <Button
-              variant="outline"
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2">
+            Số dòng/trang
+            <NativeSelect
               size="sm"
-              disabled={view.page === view.pageCount}
-              onClick={() => setPage(view.page + 1)}
+              aria-label="Số dòng/trang"
+              value={String(prefs.pageSize)}
+              onChange={(event) => handlePageSize(event.target.value)}
             >
-              Sau ›
-            </Button>
-          </div>
-        )}
+              {PAGE_SIZES.map((size) => (
+                <NativeSelectOption key={size} value={String(size)}>
+                  {size}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </label>
+          {view.pageCount > 1 && (
+            <>
+              <Button variant="outline" size="sm" disabled={view.page === 1} onClick={() => setPage(view.page - 1)}>
+                ‹ Trước
+              </Button>
+              <span>
+                Trang {view.page}/{view.pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={view.page === view.pageCount}
+                onClick={() => setPage(view.page + 1)}
+              >
+                Sau ›
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </section>
   );

@@ -77,15 +77,11 @@ export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggl
                 <TableHead
                   key={column.id}
                   aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"}
-                  className={cn(column.isNumeric && "text-right")}
                 >
                   <button
                     type="button"
                     onClick={() => onSort(column.id)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
-                      column.isNumeric && "flex-row-reverse",
-                    )}
+                    className="inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                   >
                     {column.label}
                     <SortIcon direction={direction} />
@@ -121,7 +117,7 @@ export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggl
                       key={column.id}
                       title={column.isLongText && !isExpanded ? text : undefined}
                       className={cn(
-                        column.isNumeric && "text-right tabular-nums",
+                        column.isNumeric && "tabular-nums",
                         column.id === "status" && STATUS_TONE[row.status],
                         column.isLongText && "min-w-40 max-w-xs whitespace-normal break-words",
                         column.isLongText && column.id === "note" && "text-muted-foreground",
