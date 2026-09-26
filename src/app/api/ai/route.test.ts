@@ -26,6 +26,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -76,6 +77,7 @@ describe("POST /api/ai", () => {
   });
 
   it("reports upstream failures per text", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>(async (_url, init) => {
@@ -89,5 +91,38 @@ describe("POST /api/ai", () => {
         { date: null, note: "AI HTTP 429" },
       ],
     });
+  });
+
+  it("logs OpenAI error details without the stay text or the key", async () => {
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async (_url, init) => {
+        if (inputOf(init) === "Nguyễn Văn A phòng 806") {
+          return Response.json(
+            { error: { message: "You exceeded your current quota.", type: "insufficient_quota", code: "insufficient_quota" } },
+            { status: 429 },
+          );
+        }
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }),
+    );
+
+    await post({ texts: ["Nguyễn Văn A phòng 806", "Nguyễn Văn B"] });
+
+    expect(logSpy).toHaveBeenCalledWith("[api/ai] OpenAI error", {
+      status: 429,
+      type: "insufficient_quota",
+      code: "insufficient_quota",
+      message: "You exceeded your current quota.",
+    });
+    expect(logSpy).toHaveBeenCalledWith("[api/ai] OpenAI request failed", {
+      name: "TimeoutError",
+      message: "The operation timed out.",
+    });
+    const logged = JSON.stringify(logSpy.mock.calls);
+    expect(logged).not.toContain("Nguyễn");
+    expect(logged).not.toContain("sk-test");
+    logSpy.mockRestore();
   });
 });

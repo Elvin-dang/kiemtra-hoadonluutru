@@ -16,6 +16,7 @@ const TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_TOKENS = 1000;
 
 type ResponsesPayload = { output?: { content?: { type?: string; text?: string }[] }[] };
+type OpenAiErrorPayload = { error?: { message?: string; type?: string; code?: string | null } };
 
 function parseTexts(body: unknown): string[] | null {
   if (typeof body !== "object" || body === null || !("texts" in body)) return null;
@@ -42,12 +43,34 @@ async function askOne(text: string, apiKey: string, model: string): Promise<AiRe
       body: JSON.stringify({ model, instructions: PROMPT, input: text, max_output_tokens: MAX_OUTPUT_TOKENS, store: false }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!response.ok) return { date: null, note: `AI HTTP ${response.status}` };
+    if (!response.ok) {
+      await logOpenAiError(response);
+      return { date: null, note: `AI HTTP ${response.status}` };
+    }
     const date = extractCheckout(outputText(await response.json()));
     return date ? { date: toIsoDate(date) } : { date: null, note: "AI không xác định được" };
-  } catch {
+  } catch (error) {
+    const { name, message } = error instanceof Error ? error : { name: "Unknown", message: String(error) };
+    console.error("[api/ai] OpenAI request failed", { name, message });
     return { date: null, note: "Không gọi được AI" };
   }
+}
+
+// Logged to the server (Vercel function logs). Never logs the stay text or the key.
+async function logOpenAiError(response: Response): Promise<void> {
+  const body = await response.text().catch(() => "");
+  let details: OpenAiErrorPayload["error"];
+  try {
+    details = (JSON.parse(body) as OpenAiErrorPayload).error;
+  } catch {
+    details = { message: body.slice(0, 200) };
+  }
+  console.error("[api/ai] OpenAI error", {
+    status: response.status,
+    type: details?.type,
+    code: details?.code,
+    message: details?.message,
+  });
 }
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
