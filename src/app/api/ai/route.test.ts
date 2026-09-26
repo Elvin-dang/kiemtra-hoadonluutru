@@ -70,6 +70,8 @@ describe("POST /api/ai", () => {
       instructions:
         "Trích xuất ngày kết thúc dịch vụ/check-out từ thông tin lưu trú. Chỉ trả về DD/MM/YYYY hoặc KHONG_XAC_DINH.",
       input: "a",
+      max_output_tokens: 1000,
+      store: false,
     });
   });
 

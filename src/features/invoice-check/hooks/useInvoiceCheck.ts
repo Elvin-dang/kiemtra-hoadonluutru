@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 
+import { saveFile } from "@/shared/utils/saveFile";
+
 import { fetchAiOutcomes } from "../utils/aiClient";
 import { analyze, needsAi } from "../utils/analyze";
 import { InputError } from "../utils/inputError";
@@ -57,12 +59,7 @@ export function useInvoiceCheck() {
 
   const handleDownload = useCallback(() => {
     if (state.phase !== "done") return;
-    const url = URL.createObjectURL(new Blob([state.output], { type: XLSX_MIME }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = outputFileName(state.fileName);
-    link.click();
-    URL.revokeObjectURL(url);
+    saveFile(state.output, outputFileName(state.fileName), XLSX_MIME);
   }, [state]);
 
   return { state, handleFile, handleDownload };

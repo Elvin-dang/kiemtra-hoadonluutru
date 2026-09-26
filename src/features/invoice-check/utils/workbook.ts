@@ -1,5 +1,7 @@
 import ExcelJS from "exceljs";
 
+import { formatDate } from "@/shared/utils/formatDate";
+
 import { InputError } from "./inputError";
 
 import type { AnalysisResult, CellValue, InputRow } from "../types/invoice";
@@ -42,12 +44,13 @@ export async function readInput(data: ArrayBuffer): Promise<ParsedInput> {
     const cell = (column: number) => normalizeCell(sheet.getCell(r, column).value);
     const invoiceNo = cell(1);
     if (invoiceNo === null || invoiceNo === "") continue;
+    const info = cell(5);
     rows.push({
       invoiceNo,
       invoiceDate: cell(2),
       taxCode: cell(3),
       buyer: cell(4),
-      info: String(cell(5) ?? ""),
+      info: info instanceof Date ? formatDate(info) : String(info ?? ""),
     });
     if (rows.length > MAX_ROWS) throw new InputError("too_many_rows");
   }

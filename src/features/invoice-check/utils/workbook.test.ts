@@ -63,6 +63,18 @@ describe("readInput", () => {
     expect(rows[0].invoiceDate).toEqual(new Date(Date.UTC(2025, 4, 3)));
   });
 
+  it("reads a real date cell in the stay column as dd/mm/yyyy, independent of time zone", async () => {
+    const previous = process.env.TZ;
+    process.env.TZ = "America/Los_Angeles";
+    try {
+      const data = await buildWorkbook([[1, "04/07/2026", "-", "A", new Date(Date.UTC(2026, 6, 3))]]);
+      const { rows } = await readInput(data);
+      expect(rows[0].info).toBe("03/07/2026");
+    } finally {
+      process.env.TZ = previous;
+    }
+  });
+
   it("defaults the threshold to 1 without CAU_HINH and reads B4 when present", async () => {
     const row = [1, "03/05/2025", "-", "A", "(30/04/2025-02/05/2025)"];
     expect((await readInput(await buildWorkbook([row]))).threshold).toBe(1);

@@ -12,6 +12,8 @@ const MAX_TEXTS = 50;
 const MAX_TEXT_LENGTH = 500;
 const CONCURRENCY = 5;
 const TIMEOUT_MS = 15_000;
+// Caps cost per call on this public route; includes reasoning tokens on reasoning models, so not too small.
+const MAX_OUTPUT_TOKENS = 1000;
 
 type ResponsesPayload = { output?: { content?: { type?: string; text?: string }[] }[] };
 
@@ -37,7 +39,7 @@ async function askOne(text: string, apiKey: string, model: string): Promise<AiRe
     const response = await fetch(OPENAI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, instructions: PROMPT, input: text }),
+      body: JSON.stringify({ model, instructions: PROMPT, input: text, max_output_tokens: MAX_OUTPUT_TOKENS, store: false }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!response.ok) return { date: null, note: `AI HTTP ${response.status}` };
