@@ -108,7 +108,10 @@ export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggl
                 aria-expanded={isExpanded}
                 onClick={() => onToggleRow(row.stt)}
                 onKeyDown={(event) => handleKeyDown(event, row.stt)}
-                className="cursor-pointer align-top"
+                className={cn(
+                  "cursor-pointer align-top",
+                  row.status === "Cảnh báo" && "bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50",
+                )}
               >
                 {columns.map((column) => {
                   const text = cellContent(row, column.id);
