@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { AiSettingsPanel } from "./AiSettingsPanel";
 import { ColumnMapping } from "./ColumnMapping";
 import { Alert, AlertDescription } from "./components/ui/alert";
@@ -15,9 +17,8 @@ import type { ChangeEvent } from "react";
 export function InvoiceCheck() {
   const platform = usePlatform();
   const ai = useAiSettings();
-  const { state, savedTo, saveError, handleFile, handleConfirmMapping, handleCancel, handleSave } = useInvoiceCheck(
-    ai.settings,
-  );
+  const { state, savedTo, saveError, handleFile, handleConfirmMapping, handleCancel, handleSave, handleSaveAs } =
+    useInvoiceCheck(ai.settings);
   const isProcessing = state.phase === "processing";
 
   const handleChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -25,6 +26,14 @@ export function InvoiceCheck() {
     const file = input.files?.[0];
     input.value = "";
     if (file) await handleFile({ name: file.name, path: null, data: await file.arrayBuffer() });
+  };
+
+  // Desktop: files dropped on the window or passed at launch.
+  useEffect(() => platform.onExternalFile?.((file) => void handleFile(file)), [platform, handleFile]);
+
+  const handlePick = async () => {
+    const file = await platform.pickFile?.();
+    if (file) await handleFile(file);
   };
 
   return (
@@ -38,20 +47,44 @@ export function InvoiceCheck() {
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Input
-          type="file"
-          accept=".xlsx,.xlsm"
-          aria-label="Chọn file Excel"
-          className="max-w-sm"
-          disabled={isProcessing}
-          onChange={(event) => void handleChange(event)}
-        />
+        {platform.pickFile ? (
+          <Button variant="outline" disabled={isProcessing} onClick={() => void handlePick()}>
+            Chọn file Excel
+          </Button>
+        ) : (
+          <Input
+            type="file"
+            accept=".xlsx,.xlsm"
+            aria-label="Chọn file Excel"
+            className="max-w-sm"
+            disabled={isProcessing}
+            onChange={(event) => void handleChange(event)}
+          />
+        )}
         {state.phase === "done" && (
-          <Button onClick={() => void handleSave()}>{platform.kind === "desktop" ? "Lưu kết quả" : "Tải kết quả"}</Button>
+          <>
+            <Button onClick={() => void handleSave()}>
+              {platform.kind === "desktop" ? "Lưu kết quả" : "Tải kết quả"}
+            </Button>
+            {platform.saveResultAs && (
+              <Button variant="outline" onClick={() => void handleSaveAs()}>
+                Lưu thành…
+              </Button>
+            )}
+          </>
         )}
       </div>
 
-      {savedTo && <p className="text-sm text-green-700">Đã lưu: {savedTo}</p>}
+      {savedTo && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-green-700">Đã lưu: {savedTo}</span>
+          {platform.revealFile && (
+            <Button variant="outline" size="sm" onClick={() => void platform.revealFile?.(savedTo)}>
+              Mở thư mục
+            </Button>
+          )}
+        </div>
+      )}
       {saveError && (
         <Alert variant="destructive">
           <AlertDescription>{saveError}</AlertDescription>

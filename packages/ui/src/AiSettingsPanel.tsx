@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { AiKeyFields } from "./AiKeyFields";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Switch } from "./components/ui/switch";
@@ -65,6 +66,8 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
           </span>
         </span>
       </label>
+
+      <AiKeyFields />
 
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
         {FIELDS.map(({ field, label, hint }) => (

@@ -114,5 +114,16 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
     }
   }, [state, platform]);
 
-  return { state, savedTo, saveError, handleFile, handleConfirmMapping, handleCancel, handleSave };
+  const handleSaveAs = useCallback(async () => {
+    if (state.phase !== "done" || !platform.saveResultAs) return;
+    try {
+      const outcome = await platform.saveResultAs(state.output, outputFileName(state.source.name));
+      if (outcome.savedTo) setSavedTo(outcome.savedTo);
+      setSaveError(null);
+    } catch (error) {
+      setSaveError(`Không lưu được file: ${String(error)}`);
+    }
+  }, [state, platform]);
+
+  return { state, savedTo, saveError, handleFile, handleConfirmMapping, handleCancel, handleSave, handleSaveAs };
 }

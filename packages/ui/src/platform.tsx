@@ -15,6 +15,18 @@ export type Platform = {
   askAi: AskAi;
   getAiLimits: () => Promise<AiLimits>;
   saveResult: (data: ArrayBuffer, fileName: string, source: Pick<SourceFile, "name" | "path">) => Promise<SaveOutcome>;
+
+  // Desktop-only capabilities; the web leaves them undefined.
+  pickFile?: () => Promise<SourceFile | null>;
+  onExternalFile?: (handler: (file: SourceFile) => void) => () => void;
+  saveResultAs?: (data: ArrayBuffer, fileName: string) => Promise<SaveOutcome>;
+  revealFile?: (path: string) => Promise<void>;
+  aiKey?: {
+    status: () => Promise<string | null>;
+    save: (key: string) => Promise<string | null>;
+    remove: () => Promise<void>;
+  };
+  aiModel?: { get: () => Promise<string>; set: (model: string) => Promise<void> };
 };
 
 const PlatformContext = createContext<Platform | null>(null);
