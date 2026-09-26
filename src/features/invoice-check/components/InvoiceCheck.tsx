@@ -8,8 +8,7 @@ import { useAiSettings } from "../hooks/useAiSettings";
 import { useInvoiceCheck } from "../hooks/useInvoiceCheck";
 import { AiSettingsPanel } from "./AiSettingsPanel";
 import { ColumnMapping } from "./ColumnMapping";
-import { ResultTable } from "./ResultTable";
-import { SummaryTiles } from "./SummaryTiles";
+import { ResultsView } from "./ResultsView";
 
 import type { ChangeEvent } from "react";
 
@@ -77,12 +76,7 @@ export function InvoiceCheck() {
         </Alert>
       )}
 
-      {state.phase === "done" && (
-        <>
-          <SummaryTiles counts={state.analysis.counts} />
-          <ResultTable results={state.analysis.results} />
-        </>
-      )}
+      {state.phase === "done" && <ResultsView key={state.runId} analysis={state.analysis} />}
     </main>
   );
 }

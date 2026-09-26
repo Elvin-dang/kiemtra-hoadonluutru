@@ -34,7 +34,7 @@ export type CheckState =
       columns: SheetColumn[];
       mapping: ColumnMapping;
     }
-  | { phase: "done"; fileName: string; analysis: AnalysisResult; output: ArrayBuffer }
+  | { phase: "done"; runId: number; fileName: string; analysis: AnalysisResult; output: ArrayBuffer }
   | { phase: "error"; message: string };
 
 function outputFileName(fileName: string): string {
@@ -61,7 +61,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       const ai = new Map(aiIndices.map((rowIndex, k) => [rowIndex, outcomes[k]]));
       const analysis = analyze(input.rows, input.threshold, ai);
       const output = await writeResult(workbook, analysis);
-      setState({ phase: "done", fileName, analysis, output });
+      setState({ phase: "done", runId: Date.now(), fileName, analysis, output });
     } catch (error) {
       setState({ phase: "error", message: errorMessage(error) });
     }
