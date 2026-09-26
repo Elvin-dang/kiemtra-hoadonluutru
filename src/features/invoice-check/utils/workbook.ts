@@ -8,15 +8,16 @@ import { InputError } from "./inputError";
 import type { AnalysisResult, CellValue, ColumnMapping, InputRow, SheetColumn, Status } from "../types/invoice";
 
 export const MAX_ROWS = 5000;
-const SOURCE_SHEET = "DU_LIEU_GOC";
-const CONFIG_SHEET = "CAU_HINH";
-const DEFAULT_THRESHOLD = 1;
+// The e-invoice "bán ra" export; any first sheet with the same headers also works.
+const SOURCE_SHEET = "BR_ChiTiet";
+// The KET_QUA_AI template states "Ngưỡng cảnh báo mặc định: ≥ 1 ngày".
+const THRESHOLD_DAYS = 1;
 
 export type InspectedInput = {
   workbook: ExcelJS.Workbook;
   columns: SheetColumn[];
   mapping: ColumnMapping;
-  isExactLayout: boolean;
+  isComplete: boolean;
 };
 
 export type ParsedRows = { rows: InputRow[]; threshold: number };
@@ -31,16 +32,14 @@ export function normalizeCell(value: ExcelJS.CellValue): CellValue {
   return null;
 }
 
-function readThreshold(workbook: ExcelJS.Workbook): number {
-  const value = normalizeCell(workbook.getWorksheet(CONFIG_SHEET)?.getCell("B4").value ?? null);
-  const threshold = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(threshold) && value !== null && value !== "" ? threshold : DEFAULT_THRESHOLD;
-}
-
 function sourceSheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet {
-  const sheet = workbook.getWorksheet(SOURCE_SHEET);
+  const sheet = workbook.getWorksheet(SOURCE_SHEET) ?? workbook.worksheets[0];
   if (!sheet) throw new InputError("no_sheet");
   return sheet;
+}
+
+function isEmpty(value: CellValue): boolean {
+  return value === null || (typeof value === "string" && value.trim() === "");
 }
 
 export async function inspectInput(data: ArrayBuffer): Promise<InspectedInput> {
@@ -62,8 +61,8 @@ export async function inspectInput(data: ArrayBuffer): Promise<InspectedInput> {
       header: header instanceof Date ? formatDate(header) : String(header ?? "").trim(),
     });
   }
-  const { mapping, isExactLayout } = suggestMapping(columns.map((column) => column.header));
-  return { workbook, columns, mapping, isExactLayout };
+  const { mapping, isComplete } = suggestMapping(columns.map((column) => column.header));
+  return { workbook, columns, mapping, isComplete };
 }
 
 export function readRows(workbook: ExcelJS.Workbook, mapping: ColumnMapping): ParsedRows {
@@ -72,26 +71,27 @@ export function readRows(workbook: ExcelJS.Workbook, mapping: ColumnMapping): Pa
   for (let r = 2; r <= sheet.rowCount; r++) {
     const cell = (column: number | null) => (column === null ? null : normalizeCell(sheet.getCell(r, column).value));
     const invoiceNo = cell(mapping.invoiceNo);
-    if (invoiceNo === null || invoiceNo === "") continue;
+    if (isEmpty(invoiceNo)) continue;
     const info = cell(mapping.info);
+    const buyer = cell(mapping.buyer);
     rows.push({
       invoiceNo,
       invoiceDate: cell(mapping.invoiceDate),
       taxCode: cell(mapping.taxCode),
-      buyer: cell(mapping.buyer),
+      buyer: isEmpty(buyer) ? cell(mapping.buyerAlt) : buyer,
       info: info instanceof Date ? formatDate(info) : String(info ?? ""),
     });
     if (rows.length > MAX_ROWS) throw new InputError("too_many_rows");
   }
   if (rows.length === 0) throw new InputError("no_rows");
-  return { rows, threshold: readThreshold(workbook) };
+  return { rows, threshold: THRESHOLD_DAYS };
 }
 
 const RESULT_SHEET = "KET_QUA_AI";
-const DETAIL_SHEET = "PHAN_TICH_AI";
-const RESULT_TEMPLATE_FIRST_ROW = 11;
+const HEADER_ROW = 10;
+const FIRST_DATA_ROW = 11;
+const COLUMN_COUNT = 9;
 const DATE_FORMAT = "dd/mm/yyyy";
-const DETAIL_TEMPLATE_FIRST_ROW = 2;
 const STATUS_COLUMNS = [8, 9]; // Số ngày chậm, Trạng thái
 // The template's own palette (pink/red for warnings, green for normal).
 const STATUS_STYLE: Record<Status, { fill: string | null; font: string }> = {
@@ -99,34 +99,15 @@ const STATUS_STYLE: Record<Status, { fill: string | null; font: string }> = {
   "Bình thường": { fill: "FFF0FDF4", font: "FF0B7A5E" },
   "Không xác định": { fill: null, font: "FF000000" },
 };
-const RESULT_HEADERS = [
-  "STT", "Số hóa đơn", "Ngày hóa đơn", "Mã số thuế", "Tên người mua",
-  "Thông tin thời gian lưu trú", "Ngày phải lập HĐ", "Số ngày chậm", "Trạng thái",
-];
-const DETAIL_HEADERS = ["STT", "Thông tin đầu vào", "Ngày AI nhận diện", "Phương pháp", "Độ tin cậy", "Kết quả", "Ghi chú"];
-
-function clearRows(sheet: ExcelJS.Worksheet, firstRow: number, columns: number) {
-  for (let r = firstRow; r <= sheet.rowCount; r++) {
-    for (let c = 1; c <= columns; c++) sheet.getCell(r, c).value = null;
-  }
-}
-
-function setRow(sheet: ExcelJS.Worksheet, rowNumber: number, values: CellValue[]) {
-  values.forEach((value, i) => {
-    const cell = sheet.getCell(rowNumber, i + 1);
-    cell.value = value;
-    if (value instanceof Date) cell.numFmt = DATE_FORMAT;
-  });
-}
 
 type RowStyle = { height: number | undefined; cells: Partial<ExcelJS.Style>[] };
 
-// Snapshot before writing: the template styles only its sample rows, and those carry per-row status colours.
-function captureRowStyle(sheet: ExcelJS.Worksheet, rowNumber: number, columns: number): RowStyle {
+// The template styles only its sample rows (with per-row status colours), so snapshot the first one.
+function captureRowStyle(sheet: ExcelJS.Worksheet, rowNumber: number): RowStyle {
   const row = sheet.getRow(rowNumber);
   return {
     height: row.height,
-    cells: Array.from({ length: columns }, (_, i) => structuredClone(row.getCell(i + 1).style)),
+    cells: Array.from({ length: COLUMN_COUNT }, (_, i) => structuredClone(row.getCell(i + 1).style)),
   };
 }
 
@@ -149,51 +130,53 @@ function applyStatusStyle(sheet: ExcelJS.Worksheet, rowNumber: number, status: S
   }
 }
 
-function sheetOrCreate(workbook: ExcelJS.Workbook, name: string, headers: string[]) {
-  const existing = workbook.getWorksheet(name);
-  if (existing) return { sheet: existing, isTemplate: true };
-  const sheet = workbook.addWorksheet(name);
-  sheet.addRow(headers);
-  sheet.getRow(1).font = { bold: true };
-  return { sheet, isTemplate: false };
+function setRow(sheet: ExcelJS.Worksheet, rowNumber: number, values: CellValue[]) {
+  values.forEach((value, i) => {
+    const cell = sheet.getCell(rowNumber, i + 1);
+    cell.value = value;
+    if (value instanceof Date) cell.numFmt = DATE_FORMAT;
+  });
 }
 
-export async function writeResult(workbook: ExcelJS.Workbook, { results, counts }: AnalysisResult): Promise<ArrayBuffer> {
-  const result = sheetOrCreate(workbook, RESULT_SHEET, RESULT_HEADERS);
-  const detail = sheetOrCreate(workbook, DETAIL_SHEET, DETAIL_HEADERS);
-  const firstResultRow = result.isTemplate ? RESULT_TEMPLATE_FIRST_ROW : 2;
+// Fills the one-sheet KET_QUA_AI template (public/templates/ket-qua-ai.xlsx) and returns the new file.
+export async function writeResult(
+  template: ArrayBuffer,
+  { results, counts }: AnalysisResult,
+  sourceName: string,
+): Promise<ArrayBuffer> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(template);
+  const sheet = workbook.getWorksheet(RESULT_SHEET);
+  if (!sheet) throw new Error(`Template has no ${RESULT_SHEET} sheet`);
 
-  const resultStyle = result.isTemplate
-    ? captureRowStyle(result.sheet, RESULT_TEMPLATE_FIRST_ROW, RESULT_HEADERS.length)
-    : null;
-  const detailStyle = detail.isTemplate
-    ? captureRowStyle(detail.sheet, DETAIL_TEMPLATE_FIRST_ROW, DETAIL_HEADERS.length)
-    : null;
-
-  clearRows(result.sheet, firstResultRow, RESULT_HEADERS.length);
-  clearRows(detail.sheet, DETAIL_TEMPLATE_FIRST_ROW, DETAIL_HEADERS.length);
+  const rowStyle = captureRowStyle(sheet, FIRST_DATA_ROW);
+  const templateLastRow = sheet.rowCount;
 
   results.forEach((row, i) => {
-    const detailRow = DETAIL_TEMPLATE_FIRST_ROW + i;
-    if (detailStyle) applyRowStyle(detail.sheet, detailRow, detailStyle);
-    setRow(detail.sheet, detailRow, [
-      row.stt, row.info, row.checkout, row.method, row.confidence,
-      row.checkout ? "Đã xác định" : "Không xác định", row.note,
-    ]);
-    const rowNumber = firstResultRow + i;
-    if (resultStyle) applyRowStyle(result.sheet, rowNumber, resultStyle);
-    setRow(result.sheet, rowNumber, [
+    const rowNumber = FIRST_DATA_ROW + i;
+    applyRowStyle(sheet, rowNumber, rowStyle);
+    setRow(sheet, rowNumber, [
       row.stt, row.invoiceNo, row.invoiceDate, row.taxCode, row.buyer, row.info, row.checkout, row.delay, row.status,
     ]);
-    applyStatusStyle(result.sheet, rowNumber, row.status);
+    applyStatusStyle(sheet, rowNumber, row.status);
   });
 
-  if (result.isTemplate) {
-    result.sheet.getCell("F6").value = counts.total;
-    result.sheet.getCell("G6").value = counts.ok;
-    result.sheet.getCell("H6").value = counts.warn;
-    result.sheet.getCell("I6").value = counts.unknown;
+  // Template sample rows past the last result: clear value and style (ExcelJS spliceRows keeps styles).
+  for (let r = FIRST_DATA_ROW + results.length; r <= templateLastRow; r++) {
+    const row = sheet.getRow(r);
+    row.height = sheet.properties.defaultRowHeight;
+    for (let c = 1; c <= COLUMN_COUNT; c++) {
+      row.getCell(c).value = null;
+      row.getCell(c).style = {};
+    }
   }
+
+  sheet.getCell("A5").value = `📂 NẠP DỮ LIỆU\n\nNguồn: ${sourceName}\n${results.length} dòng dữ liệu`;
+  sheet.getCell("F6").value = counts.total;
+  sheet.getCell("G6").value = counts.ok;
+  sheet.getCell("H6").value = counts.warn;
+  sheet.getCell("I6").value = counts.unknown;
+  sheet.autoFilter = `A${HEADER_ROW}:I${Math.max(HEADER_ROW, FIRST_DATA_ROW + results.length - 1)}`;
 
   return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
 }

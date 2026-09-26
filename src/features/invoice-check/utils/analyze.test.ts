@@ -15,27 +15,37 @@ function row(overrides: Partial<InputRow>): InputRow {
   return { invoiceNo: 1, invoiceDate: "03/05/2025", taxCode: "-", buyer: "A", info: "(30/04/2025-02/05/2025)", ...overrides };
 }
 
-describe("analyze — golden sample", () => {
-  it("matches the reference results for fixtures/sample.xlsx", async () => {
-    const buffer = readFileSync("fixtures/sample.xlsx");
+describe("analyze — golden: anonymised XUAT HDDT BAN RA export", () => {
+  it("matches the hand-checked result for each description format in the file", async () => {
+    const buffer = readFileSync("fixtures/br-chitiet.xlsx");
     const inspected = await inspectInput(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer);
     const input = readRows(inspected.workbook, inspected.mapping);
     const { results, counts } = analyze(input.rows, input.threshold);
+    const pick = (stt: number) => {
+      const r = results[stt - 1];
+      return [formatDate(r.invoiceDate), formatDate(r.checkout), r.delay, r.status];
+    };
 
-    expect(counts).toEqual({ total: 9, ok: 1, warn: 8, unknown: 0 });
-    expect(results.map((r) => [formatDate(r.checkout), r.delay, r.status])).toEqual([
-      ["02/05/2025", 1, "Cảnh báo"],
-      ["01/05/2025", 4, "Cảnh báo"],
-      ["05/05/2025", 2, "Cảnh báo"],
-      ["15/05/2025", 4, "Cảnh báo"],
-      ["29/10/2025", 2, "Cảnh báo"],
-      ["03/07/2026", 0, "Bình thường"],
-      ["03/07/2026", 1, "Cảnh báo"],
-      ["03/07/2026", 2, "Cảnh báo"],
-      ["03/07/2026", 3, "Cảnh báo"],
-    ]);
-    expect(results.every((r) => r.method === "Quy tắc" && r.confidence === 1)).toBe(true);
-    expect(results.map((r) => r.stt)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(counts).toEqual({ total: 76, ok: 40, warn: 8, unknown: 28 });
+    // list of nights → the last date listed (user's decision)
+    expect(pick(1)).toEqual(["04/02/2025", "03/02/2025", 1, "Cảnh báo"]);
+    expect(pick(5)).toEqual(["05/03/2025", "04/03/2025", 1, "Cảnh báo"]);
+    // no date at all → manual check
+    expect(pick(6)).toEqual(["17/03/2025", "", null, "Không xác định"]);
+    expect(pick(20)).toEqual(["27/06/2025", "", null, "Không xác định"]); // "Thuê phòng nghỉ (504)" is a room, not a date
+    // day/month without a year → year from the invoice date
+    expect(pick(34)).toEqual(["10/09/2025", "09/09/2025", 1, "Cảnh báo"]); // (9/9)
+    expect(pick(35)).toEqual(["12/09/2025", "12/09/2025", 0, "Bình thường"]); // từ 10/09 đến 12/9
+    expect(pick(36)).toEqual(["12/09/2025", "13/09/2025", -1, "Bình thường"]); // invoiced the day before check-out
+    expect(pick(41)).toEqual(["18/10/2025", "17/10/2025", 1, "Cảnh báo"]); // từ 16/10 đến 17/10
+    expect(pick(42)).toEqual(["20/10/2025", "20/10/2025", 0, "Bình thường"]); // partial start, full end
+    // typo 23/09/22025 → 23/09 rescued with the invoice's year
+    expect(pick(39)).toEqual(["23/09/2025", "23/09/2025", 0, "Bình thường"]);
+    // ranges with "-", over New Year, invoice before check-out, very late invoice
+    expect(pick(48)).toEqual(["26/11/2025", "26/11/2025", 0, "Bình thường"]);
+    expect(pick(53)).toEqual(["01/01/2026", "01/01/2026", 0, "Bình thường"]);
+    expect(pick(54)).toEqual(["20/01/2026", "21/01/2026", -1, "Bình thường"]);
+    expect(pick(75)).toEqual(["23/06/2026", "21/03/2026", 94, "Cảnh báo"]);
   });
 });
 
@@ -83,6 +93,17 @@ describe("analyze — row rules", () => {
     } finally {
       process.env.TZ = previous;
     }
+  });
+});
+
+describe("analyze — dates without a year", () => {
+  it("anchors a day/month to the row's invoice date", () => {
+    const [result] = analyze([row({ info: "Thuê phòng nghỉ (từ ngày 10/09 đến ngày 12/9)", invoiceDate: "13/09/2025" })], 1).results;
+    expect(result).toMatchObject({ checkout: d(2025, 9, 12), delay: 1, status: "Cảnh báo", method: "Quy tắc" });
+  });
+
+  it("does not send such rows to AI", () => {
+    expect(needsAi([row({ info: "Thuê phòng nghỉ (9/9)", invoiceDate: "10/09/2025" })])).toEqual([]);
   });
 });
 

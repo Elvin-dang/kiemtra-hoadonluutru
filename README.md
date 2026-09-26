@@ -1,6 +1,8 @@
 # Kiểm tra hóa đơn lưu trú
 
-Upload an invoice workbook (sheet `DU_LIEU_GOC`) and see which hotel invoices were issued late relative to the guest's check-out date.
+Upload the e-invoice sales export ("XUAT HDDT BAN RA", sheet `BR_ChiTiet`) and see which hotel invoices were issued late relative to the guest's check-out date. The download is a single `KET_QUA_AI` sheet built from `public/templates/ket-qua-ai.xlsx`.
+
+Columns are found by header name (accent-insensitive): Số hóa đơn, Ngày hóa đơn, Tên người mua (falls back to Họ tên người mua hàng), MST người mua, and Tên hàng hóa, dịch vụ as the stay description. If any is missing, the page asks the user to map columns. One output row per invoice line; warning threshold ≥ 1 day.
 
 - Parsing and the date rules run **in the browser**; the workbook never reaches the server.
 - Only stay descriptions the rules cannot read are sent to `POST /api/ai`, which asks OpenAI and returns parsed dates only.
@@ -35,6 +37,6 @@ The route uses a fixed prompt and never returns raw model text. Its limits are c
 
 Each user can lower these for their own browser under **Cài đặt AI** on the page (saved in localStorage and sent with every request); the server applies `min(user setting, ceiling)`. Lowering "Số yêu cầu song song" to 1–2 is the quick fix for `AI HTTP 429` rate-limit errors. `GET /api/ai` returns the current ceilings. Users can also turn the AI fallback off entirely; the page then never calls `/api/ai`. The browser sends texts in batches of 50 so each request stays well inside the function time limit.
 
-## Reference
+## Test data
 
-`fixtures/reference_kiemtra_hoadon.py` is the original Python implementation; `fixtures/sample.xlsx` is the golden test input.
+`fixtures/br-chitiet.xlsx` is an anonymised copy of a real export (dates and descriptions kept exactly; names, tax codes and addresses replaced). It is the golden test input. Never commit a real export — the site is public and exports contain customer data.

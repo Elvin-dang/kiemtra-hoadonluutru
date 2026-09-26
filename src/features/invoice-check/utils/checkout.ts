@@ -17,20 +17,47 @@ function makeDate(dayText: string, monthText: string, yearText: string): Date | 
   return date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date : null;
 }
 
-// Latest valid date in the text: d/m/y, d-m-y, d.m.y (2- or 4-digit year) or "d tháng m y".
-export function extractCheckout(text: string | null | undefined): Date | null {
+// Day/month with no year ("12/9", "(9/9)") takes the year that puts it closest to the invoice date:
+// 13/09 on a 12/09/2025 invoice → 2025; 30/12 on a 02/01/2026 invoice → 2025.
+// Only "/" counts, so "Phòng 2-3" is ignored.
+function partialDate(dayText: string, monthText: string, reference: Date): Date | null {
+  const year = reference.getUTCFullYear();
+  let closest: Date | null = null;
+  for (const candidate of [year - 1, year, year + 1]) {
+    const date = makeDate(dayText, monthText, String(candidate));
+    const distance = (value: Date) => Math.abs(value.getTime() - reference.getTime());
+    if (date && (!closest || distance(date) < distance(closest))) closest = date;
+  }
+  return closest;
+}
+
+// Latest valid date in the text: d/m/y, d-m-y, d.m.y (2- or 4-digit year), "d tháng m y",
+// and — when an invoice date is given — d/m without a year.
+export function extractCheckout(text: string | null | undefined, reference: Date | null = null): Date | null {
   const tokens = (text ?? "").normalize("NFC").match(TOKEN) ?? [];
   let best: Date | null = null;
-  for (let i = 0; i + 4 < tokens.length; i++) {
-    if (!DIGITS.test(tokens[i]) || !DIGITS.test(tokens[i + 2]) || !DIGITS.test(tokens[i + 4])) continue;
+  const consider = (date: Date | null) => {
+    if (date && (!best || date > best)) best = date;
+  };
+  for (let i = 0; i + 2 < tokens.length; i++) {
+    if (!DIGITS.test(tokens[i]) || !DIGITS.test(tokens[i + 2])) continue;
     const separator = tokens[i + 1];
     const secondSeparator = tokens[i + 3];
-    const isNumericDate = SEPARATORS.has(separator) && secondSeparator === separator;
+    const year = tokens[i + 4];
+    const hasYearToken = year !== undefined && DIGITS.test(year);
+    const isNumericDate = hasYearToken && SEPARATORS.has(separator) && secondSeparator === separator;
     const isWordDate =
-      MONTH_WORD.test(separator.trim().toLowerCase()) && secondSeparator.replace(/,/g, "").trim() === "";
-    if (!isNumericDate && !isWordDate) continue;
-    const date = makeDate(tokens[i], tokens[i + 2], tokens[i + 4]);
-    if (date && (!best || date > best)) best = date;
+      hasYearToken &&
+      MONTH_WORD.test(separator.trim().toLowerCase()) &&
+      (secondSeparator ?? "").replace(/,/g, "").trim() === "";
+    const fullDate = isNumericDate || isWordDate ? makeDate(tokens[i], tokens[i + 2], year) : null;
+    if (fullDate) {
+      consider(fullDate);
+      continue;
+    }
+    // A d/m that starts a valid full date was handled above; a d/m inside one ("07/2025") fails makeDate.
+    const precededBySlash = i > 0 && tokens[i - 1] === "/" && DIGITS.test(tokens[i - 2] ?? "");
+    if (reference && separator === "/" && !precededBySlash) consider(partialDate(tokens[i], tokens[i + 2], reference));
   }
   return best;
 }

@@ -14,11 +14,18 @@ import type ExcelJS from "exceljs";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const RESULT_TEMPLATE_URL = "/templates/ket-qua-ai.xlsx";
+
+async function loadResultTemplate(): Promise<ArrayBuffer> {
+  const response = await fetch(RESULT_TEMPLATE_URL);
+  if (!response.ok) throw new Error(`Cannot load ${RESULT_TEMPLATE_URL}: HTTP ${response.status}`);
+  return response.arrayBuffer();
+}
 
 const ERROR_MESSAGES: Record<InputErrorCode | "too_large" | "unexpected", string> = {
   unreadable: "Không đọc được file Excel.",
-  no_sheet: "Không tìm thấy sheet DU_LIEU_GOC. Tải file mẫu để xem định dạng.",
-  no_rows: "DU_LIEU_GOC chưa có dữ liệu.",
+  no_sheet: "File không có sheet dữ liệu. Tải file mẫu để xem định dạng.",
+  no_rows: "File chưa có dòng hóa đơn nào.",
   too_many_rows: "File có quá 5.000 dòng dữ liệu.",
   too_large: "File vượt quá 10 MB.",
   unexpected: "Đã xảy ra lỗi khi xử lý file.",
@@ -60,7 +67,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       );
       const ai = new Map(aiIndices.map((rowIndex, k) => [rowIndex, outcomes[k]]));
       const analysis = analyze(input.rows, input.threshold, ai);
-      const output = await writeResult(workbook, analysis);
+      const output = await writeResult(await loadResultTemplate(), analysis, fileName);
       setState({ phase: "done", runId: Date.now(), fileName, analysis, output });
     } catch (error) {
       setState({ phase: "error", message: errorMessage(error) });
@@ -77,7 +84,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       try {
         const { inspectInput } = await import("../utils/workbook");
         const inspected = await inspectInput(await file.arrayBuffer());
-        if (inspected.isExactLayout) {
+        if (inspected.isComplete) {
           await runAnalysis(file.name, inspected.workbook, inspected.mapping);
           return;
         }

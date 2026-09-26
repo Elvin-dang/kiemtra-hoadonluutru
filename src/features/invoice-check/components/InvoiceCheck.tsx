@@ -28,7 +28,7 @@ export function InvoiceCheck() {
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold">Kiểm tra thời điểm lập hóa đơn lưu trú</h1>
         <p className="text-muted-foreground">
-          Tải lên file Excel có sheet DU_LIEU_GOC. Hệ thống tìm ngày check-out và cảnh báo hóa đơn lập trễ.
+          Tải lên file Excel xuất hóa đơn điện tử bán ra. Hệ thống tìm ngày check-out và cảnh báo hóa đơn lập trễ.
         </p>
         <p className="text-sm text-muted-foreground">
           Dữ liệu được xử lý ngay trên máy của bạn. Chỉ nội dung lưu trú không đọc được mới được gửi tới AI.

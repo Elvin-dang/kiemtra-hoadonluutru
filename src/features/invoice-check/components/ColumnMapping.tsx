@@ -37,8 +37,8 @@ export function ColumnMapping({ fileName, columns, initialMapping, onConfirm, on
       <Alert>
         <AlertTitle>Chọn cột dữ liệu</AlertTitle>
         <AlertDescription>
-          Các cột trong sheet DU_LIEU_GOC của “{fileName}” không đúng thứ tự mẫu. Hãy chọn cột tương ứng cho từng
-          thông tin rồi bấm Tiếp tục.
+          Không tìm thấy đủ các cột cần thiết trong “{fileName}”. Hãy chọn cột tương ứng cho từng thông tin rồi bấm
+          Tiếp tục.
         </AlertDescription>
       </Alert>
 

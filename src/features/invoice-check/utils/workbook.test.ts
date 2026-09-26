@@ -9,30 +9,27 @@ import { MAX_ROWS, inspectInput, readRows, writeResult } from "./workbook";
 
 import type { ColumnMapping } from "../types/invoice";
 
-function fixture(name: string): ArrayBuffer {
-  const buffer = readFileSync(`fixtures/${name}`);
+function bytes(path: string): ArrayBuffer {
+  const buffer = readFileSync(path);
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 }
 
-const TEMPLATE_HEADERS = ["Số hóa đơn", "Ngày hóa đơn", "Mã số thuế", "Tên người mua", "Thông tin thời gian lưu trú"];
+const fixture = () => bytes("fixtures/br-chitiet.xlsx"); // anonymised copy of a real "XUAT HDDT BAN RA" export
+const template = () => bytes("public/templates/ket-qua-ai.xlsx");
 
-async function buildWorkbook(
-  rows: ExcelJS.CellValue[][],
-  setup?: (workbook: ExcelJS.Workbook) => void,
-  headers: string[] = TEMPLATE_HEADERS,
-) {
+const BR_HEADERS = ["Số hóa đơn", "Ngày hóa đơn", "Tên người mua", "Họ tên người mua hàng", "MST người mua", "Tên hàng hóa, dịch vụ"];
+
+async function buildWorkbook(rows: ExcelJS.CellValue[][], { sheetName = "BR_ChiTiet", headers = BR_HEADERS } = {}) {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("DU_LIEU_GOC");
+  const sheet = workbook.addWorksheet(sheetName);
   sheet.addRow(headers);
   rows.forEach((row) => sheet.addRow(row));
-  setup?.(workbook);
   return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
 }
 
-// Inspect, then read with the suggested mapping — what the page does for an exact layout.
 async function readAll(data: ArrayBuffer) {
   const inspected = await inspectInput(data);
-  return { workbook: inspected.workbook, ...readRows(inspected.workbook, inspected.mapping) };
+  return { ...inspected, ...readRows(inspected.workbook, inspected.mapping) };
 }
 
 async function expectInputError(promise: Promise<unknown>, code: string) {
@@ -40,40 +37,49 @@ async function expectInputError(promise: Promise<unknown>, code: string) {
   await expect(promise).rejects.toMatchObject({ code });
 }
 
+async function reload(data: ArrayBuffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(data);
+  return workbook;
+}
+
 describe("inspectInput + readRows", () => {
-  it("reads the 9 sample rows and the threshold", async () => {
-    const { rows, threshold } = await readAll(fixture("sample.xlsx"));
+  it("reads the BR_ChiTiet export directly: all 76 lines, buyer's tax code, goods/service text", async () => {
+    const { rows, threshold, isComplete } = await readAll(fixture());
+    expect(isComplete).toBe(true);
     expect(threshold).toBe(1);
-    expect(rows).toHaveLength(9);
+    expect(rows).toHaveLength(76);
     expect(rows[0]).toEqual({
       invoiceNo: 1,
-      invoiceDate: "03/05/2025",
-      taxCode: "-",
-      buyer: "Nguyễn Văn A",
-      info: "Dịch vụ đặt phòng #10258710 - phòng 806 (30/04/2025-02/05/2025)",
+      invoiceDate: "04/02/2025",
+      taxCode: "0300000001",
+      buyer: "CÔNG TY KHÁCH HÀNG 01",
+      info: "Thuê phòng  nghỉ ngày 01/02/2025;02/02/2025;03/02/2025",
     });
-    expect(rows.map((row) => row.invoiceNo)).toEqual([1, 2, 5, 6, 7, 8, 9, 10, 11]);
   });
 
-  it("reads the macro-enabled .xlsm exactly like the .xlsx", async () => {
-    const xlsm = await readAll(fixture("sample-vba.xlsm"));
-    const xlsx = await readAll(fixture("sample.xlsx"));
-    expect(xlsm.rows).toEqual(xlsx.rows);
+  it("uses the first sheet when it is not named BR_ChiTiet", async () => {
+    const { rows } = await readAll(await buildWorkbook([[1, "03/05/2025", "A", null, "0101", "x"]], { sheetName: "Sheet1" }));
+    expect(rows.map((row) => row.invoiceNo)).toEqual([1]);
+  });
+
+  it("falls back to 'Họ tên người mua hàng' when Tên người mua is empty", async () => {
+    const { rows } = await readAll(
+      await buildWorkbook([
+        [1, "03/05/2025", "CÔNG TY A", "Nguyễn Văn B", "0101", "x"],
+        [2, "03/05/2025", null, "Nguyễn Văn C", null, "x"],
+      ]),
+    );
+    expect(rows.map((row) => row.buyer)).toEqual(["CÔNG TY A", "Nguyễn Văn C"]);
   });
 
   it("keeps reading past a blank row", async () => {
-    const data = await buildWorkbook([
-      [1, "03/05/2025", "-", "A", "(30/04/2025-02/05/2025)"],
-      [],
-      [2, "05/05/2025", "-", "B", "(30/04/2025-01/05/2025)"],
-    ]);
-    const { rows } = await readAll(data);
+    const { rows } = await readAll(await buildWorkbook([[1, "03/05/2025", "A", null, "", "x"], [], [2, "05/05/2025", "B", null, "", "y"]]));
     expect(rows.map((row) => row.invoiceNo)).toEqual([1, 2]);
   });
 
   it("keeps a real Excel date cell as a Date", async () => {
-    const data = await buildWorkbook([[1, new Date(Date.UTC(2025, 4, 3)), "-", "A", "(30/04/2025-02/05/2025)"]]);
-    const { rows } = await readAll(data);
+    const { rows } = await readAll(await buildWorkbook([[1, new Date(Date.UTC(2025, 4, 3)), "A", null, "", "x"]]));
     expect(rows[0].invoiceDate).toEqual(new Date(Date.UTC(2025, 4, 3)));
   });
 
@@ -81,31 +87,28 @@ describe("inspectInput + readRows", () => {
     const previous = process.env.TZ;
     process.env.TZ = "America/Los_Angeles";
     try {
-      const data = await buildWorkbook([[1, "04/07/2026", "-", "A", new Date(Date.UTC(2026, 6, 3))]]);
-      const { rows } = await readAll(data);
+      const { rows } = await readAll(await buildWorkbook([[1, "04/07/2026", "A", null, "", new Date(Date.UTC(2026, 6, 3))]]));
       expect(rows[0].info).toBe("03/07/2026");
     } finally {
       process.env.TZ = previous;
     }
   });
 
-  it("defaults the threshold to 1 without CAU_HINH and reads B4 when present", async () => {
-    const row = [1, "03/05/2025", "-", "A", "(30/04/2025-02/05/2025)"];
-    expect((await readAll(await buildWorkbook([row]))).threshold).toBe(1);
-    const withConfig = await buildWorkbook([row], (workbook) => {
-      workbook.addWorksheet("CAU_HINH").getCell("B4").value = 3;
-    });
-    expect((await readAll(withConfig)).threshold).toBe(3);
+  it("lists the columns and asks for a mapping when a header is missing", async () => {
+    const headers = ["STT", "Tên người mua", "Số hoá đơn", "Nội dung", "Ngày hoá đơn"];
+    const inspected = await inspectInput(await buildWorkbook([[1, "Công ty A", 7, "(30/04/2025-02/05/2025)", "03/05/2025"]], { headers }));
+    expect(inspected.isComplete).toBe(false);
+    expect(inspected.columns.map((column) => `${column.letter}:${column.header}`)).toEqual([
+      "A:STT", "B:Tên người mua", "C:Số hoá đơn", "D:Nội dung", "E:Ngày hoá đơn",
+    ]);
+    const mapping: ColumnMapping = { ...inspected.mapping, info: 4 };
+    expect(readRows(inspected.workbook, mapping).rows).toEqual([
+      { invoiceNo: 7, invoiceDate: "03/05/2025", taxCode: null, buyer: "Công ty A", info: "(30/04/2025-02/05/2025)" },
+    ]);
   });
 
   it("rejects a file that is not Excel", async () => {
-    await expectInputError(readAll(new TextEncoder().encode("hello").buffer as ArrayBuffer), "unreadable");
-  });
-
-  it("rejects a workbook without DU_LIEU_GOC", async () => {
-    const workbook = new ExcelJS.Workbook();
-    workbook.addWorksheet("Sheet1").getCell("A1").value = "x";
-    await expectInputError(readAll((await workbook.xlsx.writeBuffer()) as ArrayBuffer), "no_sheet");
+    await expectInputError(inspectInput(new TextEncoder().encode("hello").buffer as ArrayBuffer), "unreadable");
   });
 
   it("rejects a sheet with only the header", async () => {
@@ -113,112 +116,64 @@ describe("inspectInput + readRows", () => {
   });
 
   it("rejects more than MAX_ROWS rows", async () => {
-    const rows = Array.from({ length: MAX_ROWS + 1 }, (_, i) => [i + 1, "03/05/2025", "-", "A", "x"]);
+    const rows = Array.from({ length: MAX_ROWS + 1 }, (_, i) => [i + 1, "03/05/2025", "A", null, "", "x"]);
     await expectInputError(readAll(await buildWorkbook(rows)), "too_many_rows");
   });
 });
 
-async function reload(data: ArrayBuffer) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(data);
-  return workbook;
-}
-
-describe("column mapping", () => {
-  const reorderedHeaders = ["STT", "Tên người mua", "Số hoá đơn", "Thông tin thời gian lưu trú", "Ngày hoá đơn"];
-  const reorderedRow = [1, "Nguyễn Văn A", 7, "(30/04/2025-02/05/2025)", "03/05/2025"];
-
-  it("lists the sheet columns and marks the template as an exact layout", async () => {
-    const { columns, isExactLayout } = await inspectInput(fixture("sample.xlsx"));
-    expect(isExactLayout).toBe(true);
-    expect(columns[4]).toEqual({ index: 5, letter: "E", header: "Thông tin thời gian lưu trú" });
-  });
-
-  it("suggests a mapping for reordered columns without treating them as exact", async () => {
-    const inspected = await inspectInput(await buildWorkbook([reorderedRow], undefined, reorderedHeaders));
-    expect(inspected.isExactLayout).toBe(false);
-    expect(inspected.mapping).toEqual({ invoiceNo: 3, invoiceDate: 5, taxCode: null, buyer: 2, info: 4 });
-    expect(inspected.columns.map((column) => column.letter)).toEqual(["A", "B", "C", "D", "E"]);
-  });
-
-  it("reads rows through a chosen mapping, leaving unmapped optional fields empty", async () => {
-    const { workbook } = await inspectInput(await buildWorkbook([reorderedRow], undefined, reorderedHeaders));
-    const mapping: ColumnMapping = { invoiceNo: 3, invoiceDate: 5, taxCode: null, buyer: 2, info: 4 };
-    expect(readRows(workbook, mapping).rows).toEqual([
-      { invoiceNo: 7, invoiceDate: "03/05/2025", taxCode: null, buyer: "Nguyễn Văn A", info: "(30/04/2025-02/05/2025)" },
-    ]);
-  });
-});
-
 describe("writeResult", () => {
-  it("fills the template sheets of the sample", async () => {
-    const input = await readAll(fixture("sample.xlsx"));
-    const output = await reload(await writeResult(input.workbook, analyze(input.rows, input.threshold)));
-    const result = output.getWorksheet("KET_QUA_AI")!;
-    const detail = output.getWorksheet("PHAN_TICH_AI")!;
+  it("returns a workbook with only KET_QUA_AI, laid out like the template", async () => {
+    const input = await readAll(fixture());
+    const output = await reload(await writeResult(template(), analyze(input.rows, input.threshold), "XUAT HDDT BAN RA.xlsx"));
+    expect(output.worksheets.map((sheet) => sheet.name)).toEqual(["KET_QUA_AI"]);
+    const sheet = output.getWorksheet("KET_QUA_AI")!;
 
-    expect(result.getCell("G11").value).toEqual(new Date(Date.UTC(2025, 4, 2)));
-    expect(result.getCell("G11").numFmt).toBe("dd/mm/yyyy");
-    expect(result.getCell("C11").value).toEqual(new Date(Date.UTC(2025, 4, 3)));
-    expect(result.getCell("H11").value).toBe(1);
-    expect(result.getCell("I11").value).toBe("Cảnh báo");
-    expect(result.getCell("I11").font.color?.argb).toBe("FFDC2626");
-    expect(result.getCell("I16").value).toBe("Bình thường");
-    expect(result.getCell("I16").font.color?.argb).toBe("FF0B7A5E");
-    expect(["F6", "G6", "H6", "I6"].map((a) => result.getCell(a).value)).toEqual([9, 1, 8, 0]);
+    expect(sheet.getCell("A1").value).toBe("CÔNG CỤ PHÂN TÍCH DỮ LIỆU LƯU TRÚ – KIỂM TRA THỜI ĐIỂM LẬP HÓA ĐƠN");
+    expect(sheet.getCell("B10").value).toBe("Số hóa đơn");
+    expect(sheet.getCell("A5").value).toBe("📂 NẠP DỮ LIỆU\n\nNguồn: XUAT HDDT BAN RA.xlsx\n76 dòng dữ liệu");
+    expect(sheet.getCell("F6").value).toBe(76);
+    expect(sheet.autoFilter).toBe("A10:I86");
 
-    expect(detail.getCell("C2").value).toEqual(new Date(Date.UTC(2025, 4, 2)));
-    expect(["D2", "E2", "F2"].map((a) => detail.getCell(a).value)).toEqual(["Quy tắc", 1, "Đã xác định"]);
+    expect(sheet.getCell("A11").value).toBe(1);
+    expect(sheet.getCell("C11").value).toEqual(new Date(Date.UTC(2025, 1, 4)));
+    expect(sheet.getCell("C11").numFmt).toBe("dd/mm/yyyy");
+    expect(sheet.getCell("D11").value).toBe("0300000001");
+    expect(sheet.getCell("E11").value).toBe("CÔNG TY KHÁCH HÀNG 01");
+    expect(sheet.getCell("F11").value).toBe("Thuê phòng  nghỉ ngày 01/02/2025;02/02/2025;03/02/2025");
+    expect(sheet.getCell("G11").value).toEqual(new Date(Date.UTC(2025, 1, 3)));
+    expect([sheet.getCell("H11").value, sheet.getCell("I11").value]).toEqual([1, "Cảnh báo"]);
+    expect(sheet.getCell("A86").value).toBe(76);
   });
 
-  it("styles rows beyond the template like its first data row", async () => {
-    const input = await readAll(fixture("sample.xlsx"));
-    const rows = [...input.rows, ...input.rows.slice(0, 3)]; // 12 rows: 3 more than the template styles
-    const output = await reload(await writeResult(input.workbook, analyze(rows, input.threshold)));
-    const result = output.getWorksheet("KET_QUA_AI")!;
-    const detail = output.getWorksheet("PHAN_TICH_AI")!;
-
-    for (let c = 1; c <= 9; c++) {
-      expect(result.getCell(22, c).border).toEqual(result.getCell(11, c).border);
-      expect(result.getCell(22, c).alignment).toEqual(result.getCell(11, c).alignment);
-    }
-    expect(result.getRow(22).height).toBe(result.getRow(11).height);
-    expect(result.getCell("I22").value).toBe("Cảnh báo");
-    for (let c = 1; c <= 7; c++) expect(detail.getCell(13, c).border).toEqual(detail.getCell(2, c).border);
+  it("styles every row like the template's first data row and nothing after the last one", async () => {
+    const input = await readAll(fixture());
+    const sheet = (await reload(await writeResult(template(), analyze(input.rows, input.threshold), "f.xlsx"))).getWorksheet("KET_QUA_AI")!;
+    for (let c = 1; c <= 9; c++) expect(sheet.getCell(86, c).border).toEqual(sheet.getCell(11, c).border);
+    expect(sheet.getRow(86).height).toBe(sheet.getRow(11).height);
+    expect(sheet.getCell("A87").value).toBeNull();
+    expect(sheet.getCell("A87").border?.top).toBeUndefined();
   });
 
-  it("colours the status cells by the row's own status, not the template row", async () => {
-    const input = await readAll(fixture("sample.xlsx"));
-    const rows = input.rows.map((row, i) => (i === 5 ? { ...row, info: "Thuê phòng nghỉ" } : row));
-    const output = await reload(await writeResult(input.workbook, analyze(rows, input.threshold)));
-    const result = output.getWorksheet("KET_QUA_AI")!;
-    const fillOf = (address: string) => {
-      const fill = result.getCell(address).fill;
-      return fill?.type === "pattern" ? (fill.fgColor?.argb ?? fill.pattern) : undefined;
+  it("removes the template's unused styled rows when there are fewer results", async () => {
+    const input = await readAll(fixture());
+    const sheet = (await reload(await writeResult(template(), analyze(input.rows.slice(0, 3), 1), "f.xlsx"))).getWorksheet("KET_QUA_AI")!;
+    expect(sheet.getCell("A13").value).toBe(3);
+    expect(sheet.getCell("A14").border?.top).toBeUndefined();
+    expect(sheet.getCell("A19").border?.top).toBeUndefined();
+    expect(sheet.autoFilter).toBe("A10:I13");
+  });
+
+  it("colours the status cells by each row's own status", async () => {
+    const input = await readAll(fixture());
+    const sheet = (await reload(await writeResult(template(), analyze(input.rows, input.threshold), "f.xlsx"))).getWorksheet("KET_QUA_AI")!;
+    const style = (row: number) => {
+      const fill = sheet.getCell(row, 9).fill;
+      return [sheet.getCell(row, 9).value, fill?.type === "pattern" ? (fill.fgColor?.argb ?? fill.pattern) : null, sheet.getCell(row, 9).font.color?.argb];
     };
-
-    expect(result.getCell("I16").value).toBe("Không xác định"); // template row 16 was the green "Bình thường" row
-    expect([fillOf("H16"), fillOf("I16")]).toEqual(["none", "none"]);
-    expect(result.getCell("I16").font.color?.argb).toBe("FF000000");
-    expect([fillOf("H11"), fillOf("I11")]).toEqual(["FFFEF2F2", "FFFEF2F2"]);
-  });
-
-  it("clears stale rows from the template", async () => {
-    const input = await readAll(fixture("sample.xlsx"));
-    const output = await reload(await writeResult(input.workbook, analyze(input.rows.slice(0, 3), input.threshold)));
-    expect(output.getWorksheet("KET_QUA_AI")!.getCell("A14").value).toBeNull();
-    expect(output.getWorksheet("PHAN_TICH_AI")!.getCell("A5").value).toBeNull();
-    expect(output.getWorksheet("KET_QUA_AI")!.getCell("F6").value).toBe(3);
-  });
-
-  it("creates both sheets when the upload has only DU_LIEU_GOC", async () => {
-    const input = await readAll(await buildWorkbook([[1, "03/05/2025", "-", "A", "(30/04/2025-02/05/2025)"]]));
-    const output = await reload(await writeResult(input.workbook, analyze(input.rows, input.threshold)));
-    const result = output.getWorksheet("KET_QUA_AI")!;
-    const detail = output.getWorksheet("PHAN_TICH_AI")!;
-    expect(result.getCell("A1").value).toBe("STT");
-    expect(result.getCell("I2").value).toBe("Cảnh báo");
-    expect(detail.getCell("A1").value).toBe("STT");
-    expect(detail.getCell("D2").value).toBe("Quy tắc");
+    const statuses = Array.from({ length: 76 }, (_, i) => sheet.getCell(11 + i, 9).value);
+    const rowOf = (status: string) => 11 + statuses.indexOf(status);
+    expect(style(rowOf("Cảnh báo"))).toEqual(["Cảnh báo", "FFFEF2F2", "FFDC2626"]);
+    expect(style(rowOf("Bình thường"))).toEqual(["Bình thường", "FFF0FDF4", "FF0B7A5E"]);
+    expect(style(rowOf("Không xác định"))).toEqual(["Không xác định", "none", "FF000000"]);
   });
 });

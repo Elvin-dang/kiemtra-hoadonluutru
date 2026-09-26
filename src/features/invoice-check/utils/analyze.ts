@@ -4,15 +4,20 @@ import type { AiOutcome, AnalysisResult, Counts, InputRow, Method, RowResult, St
 
 const DAY_MS = 86_400_000;
 
+// Rules first: the invoice date anchors day/month dates that have no year.
+function ruleCheckout(row: InputRow): Date | null {
+  return extractCheckout(row.info, toDate(row.invoiceDate));
+}
+
 export function needsAi(rows: InputRow[]): number[] {
-  return rows.flatMap((row, index) => (row.info.trim() !== "" && !extractCheckout(row.info) ? [index] : []));
+  return rows.flatMap((row, index) => (row.info.trim() !== "" && !ruleCheckout(row) ? [index] : []));
 }
 
 export function analyze(rows: InputRow[], threshold: number, ai: Map<number, AiOutcome> = new Map()): AnalysisResult {
   const counts: Counts = { total: rows.length, ok: 0, warn: 0, unknown: 0 };
 
   const results = rows.map((row, index): RowResult => {
-    let checkout = extractCheckout(row.info);
+    let checkout = ruleCheckout(row);
     let method: Method = "Quy tắc";
     let note = "";
     if (!checkout) {
