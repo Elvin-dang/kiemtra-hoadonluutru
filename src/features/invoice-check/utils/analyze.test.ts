@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { formatDate } from "@/shared/utils/formatDate";
 
 import { analyze, needsAi } from "./analyze";
-import { readInput } from "./workbook";
+import { inspectInput, readRows } from "./workbook";
 
 import type { InputRow } from "../types/invoice";
 
@@ -18,7 +18,8 @@ function row(overrides: Partial<InputRow>): InputRow {
 describe("analyze — golden sample", () => {
   it("matches the reference results for fixtures/sample.xlsx", async () => {
     const buffer = readFileSync("fixtures/sample.xlsx");
-    const input = await readInput(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer);
+    const inspected = await inspectInput(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer);
+    const input = readRows(inspected.workbook, inspected.mapping);
     const { results, counts } = analyze(input.rows, input.threshold);
 
     expect(counts).toEqual({ total: 9, ok: 1, warn: 8, unknown: 0 });

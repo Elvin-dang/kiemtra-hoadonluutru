@@ -2,16 +2,24 @@ import ExcelJS from "exceljs";
 
 import { formatDate } from "@/shared/utils/formatDate";
 
+import { suggestMapping } from "./columns";
 import { InputError } from "./inputError";
 
-import type { AnalysisResult, CellValue, InputRow } from "../types/invoice";
+import type { AnalysisResult, CellValue, ColumnMapping, InputRow, SheetColumn } from "../types/invoice";
 
 export const MAX_ROWS = 5000;
 const SOURCE_SHEET = "DU_LIEU_GOC";
 const CONFIG_SHEET = "CAU_HINH";
 const DEFAULT_THRESHOLD = 1;
 
-export type ParsedInput = { workbook: ExcelJS.Workbook; rows: InputRow[]; threshold: number };
+export type InspectedInput = {
+  workbook: ExcelJS.Workbook;
+  columns: SheetColumn[];
+  mapping: ColumnMapping;
+  isExactLayout: boolean;
+};
+
+export type ParsedRows = { rows: InputRow[]; threshold: number };
 
 export function normalizeCell(value: ExcelJS.CellValue): CellValue {
   if (value === null || value === undefined) return null;
@@ -29,33 +37,54 @@ function readThreshold(workbook: ExcelJS.Workbook): number {
   return Number.isFinite(threshold) && value !== null && value !== "" ? threshold : DEFAULT_THRESHOLD;
 }
 
-export async function readInput(data: ArrayBuffer): Promise<ParsedInput> {
+function sourceSheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet {
+  const sheet = workbook.getWorksheet(SOURCE_SHEET);
+  if (!sheet) throw new InputError("no_sheet");
+  return sheet;
+}
+
+export async function inspectInput(data: ArrayBuffer): Promise<InspectedInput> {
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(data);
   } catch {
     throw new InputError("unreadable");
   }
-  const sheet = workbook.getWorksheet(SOURCE_SHEET);
-  if (!sheet) throw new InputError("no_sheet");
+  const sheet = sourceSheet(workbook);
+  if (sheet.rowCount < 2) throw new InputError("no_rows");
 
+  const columns: SheetColumn[] = [];
+  for (let c = 1; c <= sheet.columnCount; c++) {
+    const header = normalizeCell(sheet.getCell(1, c).value);
+    columns.push({
+      index: c,
+      letter: sheet.getColumn(c).letter,
+      header: header instanceof Date ? formatDate(header) : String(header ?? "").trim(),
+    });
+  }
+  const { mapping, isExactLayout } = suggestMapping(columns.map((column) => column.header));
+  return { workbook, columns, mapping, isExactLayout };
+}
+
+export function readRows(workbook: ExcelJS.Workbook, mapping: ColumnMapping): ParsedRows {
+  const sheet = sourceSheet(workbook);
   const rows: InputRow[] = [];
   for (let r = 2; r <= sheet.rowCount; r++) {
-    const cell = (column: number) => normalizeCell(sheet.getCell(r, column).value);
-    const invoiceNo = cell(1);
+    const cell = (column: number | null) => (column === null ? null : normalizeCell(sheet.getCell(r, column).value));
+    const invoiceNo = cell(mapping.invoiceNo);
     if (invoiceNo === null || invoiceNo === "") continue;
-    const info = cell(5);
+    const info = cell(mapping.info);
     rows.push({
       invoiceNo,
-      invoiceDate: cell(2),
-      taxCode: cell(3),
-      buyer: cell(4),
+      invoiceDate: cell(mapping.invoiceDate),
+      taxCode: cell(mapping.taxCode),
+      buyer: cell(mapping.buyer),
       info: info instanceof Date ? formatDate(info) : String(info ?? ""),
     });
     if (rows.length > MAX_ROWS) throw new InputError("too_many_rows");
   }
   if (rows.length === 0) throw new InputError("no_rows");
-  return { workbook, rows, threshold: readThreshold(workbook) };
+  return { rows, threshold: readThreshold(workbook) };
 }
 
 const RESULT_SHEET = "KET_QUA_AI";

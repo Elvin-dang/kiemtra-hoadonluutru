@@ -34,3 +34,10 @@ export type RowResult = {
 export type Counts = { total: number; ok: number; warn: number; unknown: number };
 
 export type AnalysisResult = { results: RowResult[]; counts: Counts };
+
+export type MappingField = "invoiceNo" | "invoiceDate" | "taxCode" | "buyer" | "info";
+
+// 1-based column index in DU_LIEU_GOC, or null when the column is not present.
+export type ColumnMapping = Record<MappingField, number | null>;
+
+export type SheetColumn = { index: number; letter: string; header: string };

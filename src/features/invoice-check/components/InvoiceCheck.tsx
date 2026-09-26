@@ -5,13 +5,14 @@ import { Button, buttonVariants } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 
 import { useInvoiceCheck } from "../hooks/useInvoiceCheck";
+import { ColumnMapping } from "./ColumnMapping";
 import { ResultTable } from "./ResultTable";
 import { SummaryTiles } from "./SummaryTiles";
 
 import type { ChangeEvent } from "react";
 
 export function InvoiceCheck() {
-  const { state, handleFile, handleDownload } = useInvoiceCheck();
+  const { state, handleFile, handleConfirmMapping, handleCancel, handleDownload } = useInvoiceCheck();
   const isProcessing = state.phase === "processing";
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -48,6 +49,17 @@ export function InvoiceCheck() {
       </div>
 
       {isProcessing && <p className="text-muted-foreground">Đang xử lý…</p>}
+
+      {state.phase === "mapping" && (
+        <ColumnMapping
+          key={state.fileName}
+          fileName={state.fileName}
+          columns={state.columns}
+          initialMapping={state.mapping}
+          onConfirm={handleConfirmMapping}
+          onCancel={handleCancel}
+        />
+      )}
 
       {state.phase === "error" && (
         <Alert variant="destructive">
