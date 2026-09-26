@@ -1,6 +1,6 @@
 import { extractCheckout, toIsoDate } from "@/features/invoice-check/utils/checkout";
 
-import type { AiResponseItem, AiSettings } from "@/features/invoice-check/types/invoice";
+import type { AiResponseItem, AiLimits } from "@/features/invoice-check/types/invoice";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -10,7 +10,7 @@ const PROMPT =
   "Trích xuất ngày kết thúc dịch vụ/check-out từ thông tin lưu trú. Chỉ trả về DD/MM/YYYY hoặc KHONG_XAC_DINH.";
 // Server ceilings (override with AI_MAX_TEXTS / AI_MAX_TEXT_LENGTH / AI_MAX_CONCURRENCY).
 // Clients may ask for less, never more: this route is public.
-const DEFAULT_LIMITS: AiSettings = { maxTexts: 50, maxTextLength: 500, concurrency: 5 };
+const DEFAULT_LIMITS: AiLimits = { maxTexts: 1000, maxTextLength: 500, concurrency: 10 };
 const TIMEOUT_MS = 15_000;
 // Caps cost per call on this public route; includes reasoning tokens on reasoning models, so not too small.
 const MAX_OUTPUT_TOKENS = 1000;
@@ -23,7 +23,7 @@ function positiveIntEnv(name: string, fallback: number): number {
   return Number.isInteger(value) && value >= 1 ? value : fallback;
 }
 
-function readLimits(): AiSettings {
+function readLimits(): AiLimits {
   return {
     maxTexts: positiveIntEnv("AI_MAX_TEXTS", DEFAULT_LIMITS.maxTexts),
     maxTextLength: positiveIntEnv("AI_MAX_TEXT_LENGTH", DEFAULT_LIMITS.maxTextLength),
@@ -36,7 +36,7 @@ function isPositiveInt(value: unknown): value is number {
 }
 
 // Effective limits = min(client setting, server ceiling). No settings → the ceilings.
-function effectiveLimits(settings: unknown, limits: AiSettings): AiSettings | null {
+function effectiveLimits(settings: unknown, limits: AiLimits): AiLimits | null {
   if (settings === undefined) return limits;
   if (typeof settings !== "object" || settings === null) return null;
   const requested = settings as Record<string, unknown>;
@@ -49,7 +49,7 @@ function effectiveLimits(settings: unknown, limits: AiSettings): AiSettings | nu
   return result;
 }
 
-function parseRequest(body: unknown, limits: AiSettings): { texts: string[]; concurrency: number } | null {
+function parseRequest(body: unknown, limits: AiLimits): { texts: string[]; concurrency: number } | null {
   if (typeof body !== "object" || body === null || !("texts" in body)) return null;
   const { texts } = body;
   const effective = effectiveLimits("settings" in body ? body.settings : undefined, limits);

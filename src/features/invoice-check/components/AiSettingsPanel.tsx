@@ -4,17 +4,18 @@ import { useState } from "react";
 
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
+import { Switch } from "@/shared/components/ui/switch";
 
-import type { AiSettings } from "../types/invoice";
+import type { AiLimits, AiSettings } from "../types/invoice";
 
 type AiSettingsPanelProps = {
   settings: AiSettings;
-  limits: AiSettings;
+  limits: AiLimits;
   onChange: (settings: AiSettings) => void;
   onReset: () => void;
 };
 
-type Field = keyof AiSettings;
+type Field = keyof AiLimits;
 type Drafts = Record<Field, string>;
 
 const FIELDS: { field: Field; label: string; hint: string }[] = [
@@ -48,7 +49,23 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
 
   return (
     <details className="rounded-lg border p-4">
-      <summary className="cursor-pointer font-medium">Cài đặt AI</summary>
+      <summary className="cursor-pointer font-medium">
+        Cài đặt AI{" "}
+        <span className={settings.isEnabled ? "text-green-700" : "text-muted-foreground"}>
+          — {settings.isEnabled ? "Đang bật" : "Đang tắt"}
+        </span>
+      </summary>
+
+      <label className="mt-4 flex items-center gap-3 text-sm">
+        <Switch checked={settings.isEnabled} onCheckedChange={(isEnabled) => onChange({ ...settings, isEnabled })} />
+        <span>
+          <span className="font-medium">Dùng AI cho dòng không đọc được</span>
+          <span className="block text-muted-foreground">
+            Khi tắt, các dòng này được đánh dấu để kiểm tra thủ công và không có dữ liệu nào được gửi tới AI.
+          </span>
+        </span>
+      </label>
+
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
         {FIELDS.map(({ field, label, hint }) => (
           <label key={field} className="flex flex-col gap-1 text-sm">
@@ -59,6 +76,7 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
               min={1}
               max={limits[field]}
               step={1}
+              disabled={!settings.isEnabled}
               value={drafts[field]}
               onChange={(event) => handleChange(field, event.target.value)}
               onBlur={() => setDrafts(toDrafts(settings))}
@@ -70,7 +88,7 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
         ))}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button variant="outline" onClick={onReset}>
+        <Button variant="outline" disabled={!settings.isEnabled} onClick={onReset}>
           Khôi phục mặc định
         </Button>
         <p className="text-sm text-muted-foreground">

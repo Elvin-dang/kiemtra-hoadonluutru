@@ -4,27 +4,31 @@ import { useCallback, useEffect, useState } from "react";
 
 import { DEFAULT_AI_SETTINGS, loadSettings, sanitizeSettings, saveSettings } from "../utils/aiSettings";
 
-import type { AiSettings } from "../types/invoice";
+import type { AiLimits, AiSettings } from "../types/invoice";
 
-const NO_LIMIT: AiSettings = {
+const NO_LIMIT: AiLimits = {
   maxTexts: Number.MAX_SAFE_INTEGER,
   maxTextLength: Number.MAX_SAFE_INTEGER,
   concurrency: Number.MAX_SAFE_INTEGER,
 };
 
-async function fetchServerLimits(): Promise<AiSettings> {
+function numericLimits({ maxTexts, maxTextLength, concurrency }: AiLimits): AiLimits {
+  return { maxTexts, maxTextLength, concurrency };
+}
+
+async function fetchServerLimits(): Promise<AiLimits> {
   try {
     const response = await fetch("/api/ai");
-    if (!response.ok) return DEFAULT_AI_SETTINGS;
+    if (!response.ok) return numericLimits(DEFAULT_AI_SETTINGS);
     const { limits } = (await response.json()) as { limits?: unknown };
-    return sanitizeSettings(limits, NO_LIMIT);
+    return numericLimits(sanitizeSettings(limits, NO_LIMIT));
   } catch {
-    return DEFAULT_AI_SETTINGS;
+    return numericLimits(DEFAULT_AI_SETTINGS);
   }
 }
 
 export function useAiSettings() {
-  const [limits, setLimits] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
+  const [limits, setLimits] = useState<AiLimits>(() => numericLimits(DEFAULT_AI_SETTINGS));
   const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
 
   // localStorage is read after mount (not during render) so server and client HTML match.
@@ -49,7 +53,11 @@ export function useAiSettings() {
     [limits],
   );
 
-  const resetSettings = useCallback(() => updateSettings(sanitizeSettings(null, limits)), [limits, updateSettings]);
+  // Reset restores the numbers but keeps the on/off choice.
+  const resetSettings = useCallback(
+    () => updateSettings({ ...sanitizeSettings(null, limits), isEnabled: settings.isEnabled }),
+    [limits, settings.isEnabled, updateSettings],
+  );
 
   return { settings, limits, updateSettings, resetSettings };
 }

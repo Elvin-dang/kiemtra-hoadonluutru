@@ -43,7 +43,7 @@ describe("POST /api/ai", () => {
     ["not json"],
     [{}],
     [{ texts: [] }],
-    [{ texts: Array.from({ length: 51 }, () => "x") }],
+    [{ texts: Array.from({ length: 1001 }, () => "x") }],
     [{ texts: [""] }],
     [{ texts: ["x".repeat(501)] }],
     [{ texts: [1] }],
@@ -160,8 +160,8 @@ describe("POST /api/ai — client settings within server ceilings", () => {
 
   it("clamps a client concurrency above the server ceiling", async () => {
     const maxInFlight = trackConcurrency();
-    await post({ texts: texts(10), settings: { maxTexts: 50, maxTextLength: 500, concurrency: 99 } });
-    expect(maxInFlight()).toBe(5);
+    await post({ texts: texts(20), settings: { maxTexts: 1000, maxTextLength: 500, concurrency: 99 } });
+    expect(maxInFlight()).toBe(10);
   });
 
   it("applies a lower client maxTexts and maxTextLength", async () => {
@@ -188,13 +188,13 @@ describe("GET /api/ai", () => {
     vi.stubGlobal("fetch", fetchMock);
     vi.stubEnv("AI_MAX_CONCURRENCY", "2");
     const response = await GET();
-    expect(await response.json()).toEqual({ limits: { maxTexts: 50, maxTextLength: 500, concurrency: 2 } });
+    expect(await response.json()).toEqual({ limits: { maxTexts: 1000, maxTextLength: 500, concurrency: 2 } });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("ignores invalid env values", async () => {
     vi.stubEnv("AI_MAX_TEXTS", "lots");
     vi.stubEnv("AI_MAX_TEXT_LENGTH", "0");
-    expect(await (await GET()).json()).toEqual({ limits: { maxTexts: 50, maxTextLength: 500, concurrency: 5 } });
+    expect(await (await GET()).json()).toEqual({ limits: { maxTexts: 1000, maxTextLength: 500, concurrency: 10 } });
   });
 });

@@ -29,11 +29,11 @@ The site is public with no login, so cap what `/api/ai` can spend:
 
 The route uses a fixed prompt and never returns raw model text. Its limits are ceilings set by env vars (defaults in brackets):
 
-- `AI_MAX_TEXTS` (50): texts per request
+- `AI_MAX_TEXTS` (1000): texts per request
 - `AI_MAX_TEXT_LENGTH` (500): characters per text
-- `AI_MAX_CONCURRENCY` (5): parallel OpenAI calls
+- `AI_MAX_CONCURRENCY` (10): parallel OpenAI calls
 
-Each user can lower these for their own browser under **Cài đặt AI** on the page (saved in localStorage and sent with every request); the server applies `min(user setting, ceiling)`. Lowering "Số yêu cầu song song" to 1–2 is the quick fix for `AI HTTP 429` rate-limit errors. `GET /api/ai` returns the current ceilings.
+Each user can lower these for their own browser under **Cài đặt AI** on the page (saved in localStorage and sent with every request); the server applies `min(user setting, ceiling)`. Lowering "Số yêu cầu song song" to 1–2 is the quick fix for `AI HTTP 429` rate-limit errors. `GET /api/ai` returns the current ceilings. Users can also turn the AI fallback off entirely; the page then never calls `/api/ai`. The browser sends texts in batches of 50 so each request stays well inside the function time limit.
 
 ## Reference
 

@@ -42,5 +42,8 @@ export type ColumnMapping = Record<MappingField, number | null>;
 
 export type SheetColumn = { index: number; letter: string; header: string };
 
-// Per-browser AI preferences; the server applies min(setting, its own ceiling).
-export type AiSettings = { maxTexts: number; maxTextLength: number; concurrency: number };
+// The numeric AI limits: server ceilings, and what a browser asks for (server applies the min).
+export type AiLimits = { maxTexts: number; maxTextLength: number; concurrency: number };
+
+// Per-browser AI preferences, saved in localStorage.
+export type AiSettings = AiLimits & { isEnabled: boolean };

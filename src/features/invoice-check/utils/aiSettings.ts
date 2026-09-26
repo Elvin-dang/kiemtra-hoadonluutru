@@ -1,21 +1,22 @@
-import type { AiSettings } from "../types/invoice";
+import type { AiLimits, AiSettings } from "../types/invoice";
 
-export const DEFAULT_AI_SETTINGS: AiSettings = { maxTexts: 50, maxTextLength: 500, concurrency: 5 };
+export const DEFAULT_AI_SETTINGS: AiSettings = { isEnabled: true, maxTexts: 50, maxTextLength: 500, concurrency: 5 };
 
 const STORAGE_KEY = "kiemtra-hoadon:ai-settings";
 const FIELDS = ["maxTexts", "maxTextLength", "concurrency"] as const;
 
 type KeyValueStorage = Pick<Storage, "getItem" | "setItem">;
 
-function pick(value: unknown, field: (typeof FIELDS)[number]): unknown {
+function pick(value: unknown, field: string): unknown {
   return typeof value === "object" && value !== null && field in value
     ? (value as Record<string, unknown>)[field]
     : undefined;
 }
 
 // Whole numbers from 1 up to the server limit; anything else falls back to the (clamped) default.
-export function sanitizeSettings(value: unknown, limits: AiSettings): AiSettings {
-  const result = { ...DEFAULT_AI_SETTINGS };
+export function sanitizeSettings(value: unknown, limits: AiLimits): AiSettings {
+  const isEnabled = pick(value, "isEnabled");
+  const result = { ...DEFAULT_AI_SETTINGS, isEnabled: typeof isEnabled === "boolean" ? isEnabled : true };
   for (const field of FIELDS) {
     const candidate = pick(value, field);
     const isValid = typeof candidate === "number" && Number.isInteger(candidate) && candidate >= 1;
@@ -32,7 +33,7 @@ export function browserStorage(): KeyValueStorage | undefined {
   }
 }
 
-export function loadSettings(limits: AiSettings, storage: KeyValueStorage | undefined = browserStorage()): AiSettings {
+export function loadSettings(limits: AiLimits, storage: KeyValueStorage | undefined = browserStorage()): AiSettings {
   try {
     const raw = storage?.getItem(STORAGE_KEY);
     return sanitizeSettings(raw ? JSON.parse(raw) : null, limits);
