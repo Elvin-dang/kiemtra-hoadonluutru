@@ -6,6 +6,7 @@ import { AiKeyFields } from "./AiKeyFields";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Switch } from "./components/ui/switch";
+import { usePlatform } from "./platform";
 
 import type { AiLimits, AiSettings } from "@kiemtra/core";
 
@@ -34,6 +35,7 @@ function toDrafts(settings: AiSettings): Drafts {
 }
 
 export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSettingsPanelProps) {
+  const { kind } = usePlatform();
   // Drafts let a field be empty while typing; only whole numbers ≥ 1 are committed.
   const [drafts, setDrafts] = useState<Drafts>(() => toDrafts(settings));
   const [syncedSettings, setSyncedSettings] = useState(settings);
@@ -95,7 +97,9 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
           Khôi phục mặc định
         </Button>
         <p className="text-sm text-muted-foreground">
-          Lưu trên trình duyệt này và gửi kèm dữ liệu tới máy chủ. Máy chủ không cho vượt giới hạn trên.
+          {kind === "desktop"
+            ? "Lưu trên máy này."
+            : "Lưu trên trình duyệt này và gửi kèm dữ liệu tới máy chủ. Máy chủ không cho vượt giới hạn trên."}
         </p>
       </div>
     </details>

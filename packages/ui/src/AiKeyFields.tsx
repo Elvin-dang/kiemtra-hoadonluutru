@@ -53,20 +53,10 @@ export function AiKeyFields() {
   };
 
   return (
-    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <div className="mt-4 grid items-start gap-4 sm:grid-cols-2">
       {aiKey && (
         <div className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Khóa OpenAI API</span>
-          {keyStatus ? (
-            <div className="flex items-center gap-2">
-              <span className="text-green-700">Đã lưu (••••{keyStatus})</span>
-              <Button variant="outline" size="sm" onClick={() => void handleRemoveKey()}>
-                Xóa khóa
-              </Button>
-            </div>
-          ) : (
-            <span className="text-muted-foreground">Chưa có khóa — AI sẽ không được dùng.</span>
-          )}
           <div className="flex gap-2">
             <Input
               type="password"
@@ -79,7 +69,17 @@ export function AiKeyFields() {
             <Button disabled={!draftKey.trim()} onClick={() => void handleSaveKey()}>
               Lưu khóa
             </Button>
+            {keyStatus && (
+              <Button variant="outline" onClick={() => void handleRemoveKey()}>
+                Xóa khóa
+              </Button>
+            )}
           </div>
+          {keyStatus ? (
+            <span className="text-green-700">Đã lưu (••••{keyStatus})</span>
+          ) : (
+            <span className="text-muted-foreground">Chưa có khóa — AI sẽ không được dùng.</span>
+          )}
           <span className="text-muted-foreground">Khóa được lưu an toàn trong Windows (Credential Manager).</span>
           {message && <span className="text-red-600">{message}</span>}
         </div>
