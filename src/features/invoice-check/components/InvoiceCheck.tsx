@@ -1,7 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "@/shared/components/ui/alert";
-import { Button, buttonVariants } from "@/shared/components/ui/button";
+import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 
 import { useAiSettings } from "../hooks/useAiSettings";
@@ -44,9 +44,6 @@ export function InvoiceCheck() {
           disabled={isProcessing}
           onChange={handleChange}
         />
-        <a href="/mau_du_lieu.xlsx" download className={buttonVariants({ variant: "outline" })}>
-          Tải file mẫu
-        </a>
         {state.phase === "done" && <Button onClick={handleDownload}>Tải kết quả</Button>}
       </div>
 

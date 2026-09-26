@@ -24,7 +24,7 @@ async function loadResultTemplate(): Promise<ArrayBuffer> {
 
 const ERROR_MESSAGES: Record<InputErrorCode | "too_large" | "unexpected", string> = {
   unreadable: "Không đọc được file Excel.",
-  no_sheet: "File không có sheet dữ liệu. Tải file mẫu để xem định dạng.",
+  no_sheet: "File không có sheet dữ liệu.",
   no_rows: "File chưa có dòng hóa đơn nào.",
   too_many_rows: "File có quá 5.000 dòng dữ liệu.",
   too_large: "File vượt quá 10 MB.",
