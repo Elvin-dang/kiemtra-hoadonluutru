@@ -30,6 +30,18 @@ function ruleCheckout(row: InputRow): Date | null {
   return extractCheckout(row.info, toDate(row.invoiceDate));
 }
 
+export const NO_DATE_NOTE = "Nội dung không có ngày — nhập ngày trong bảng";
+
+// Words that can carry a date without two numbers ("đêm 12", "ngày mai", "check-out", "May 3").
+const DATE_WORDS = /ngày|tháng|đêm|hôm|tuần|night|check|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/;
+
+// Pre-check before AI: "Thuê phòng nghỉ" or "Thuê phòng nghỉ (504)" (a room number) cannot
+// hold a date, so asking AI only costs time and money. Errs towards sending.
+export function mightHaveDate(text: string): boolean {
+  const normalized = text.normalize("NFC").toLowerCase();
+  return (normalized.match(/\d+/g)?.length ?? 0) >= 2 || DATE_WORDS.test(normalized);
+}
+
 export function needsAi(rows: InputRow[]): number[] {
   return rows.flatMap((row, index) => (row.info.trim() !== "" && !ruleCheckout(row) ? [index] : []));
 }

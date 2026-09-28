@@ -6,6 +6,8 @@ import {
   analyze,
   fetchAiOutcomes,
   InputError,
+  mightHaveDate,
+  NO_DATE_NOTE,
   needsAi,
   onlyWarnings,
   recallMapping,
@@ -18,6 +20,7 @@ import {
 import { usePlatform } from "./platform";
 
 import type {
+  AiOutcome,
   AiProgress,
   AiSettings,
   AnalysisResult,
@@ -93,7 +96,10 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
     async (workbook: ExcelJS.Workbook, mapping: ColumnMapping, signal: AbortSignal) => {
       const { readRows } = await import("@kiemtra/core/workbook");
       const input = readRows(workbook, mapping);
-      const aiIndices = needsAi(input.rows);
+      const candidates = needsAi(input.rows);
+      const aiIndices = aiSettings.isPrecheckEnabled
+        ? candidates.filter((index) => mightHaveDate(input.rows[index].info))
+        : candidates;
       const outcomes = await fetchAiOutcomes(
         aiIndices.map((index) => input.rows[index].info),
         aiSettings,
@@ -101,7 +107,8 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
         { signal, onProgress: (progress) => setAiProgress(progress.total > 0 ? progress : null) },
       );
       setAiProgress(null);
-      const ai = new Map(aiIndices.map((rowIndex, k) => [rowIndex, outcomes[k]]));
+      const ai = new Map<number, AiOutcome>(candidates.map((rowIndex) => [rowIndex, { date: null, note: NO_DATE_NOTE }]));
+      aiIndices.forEach((rowIndex, k) => ai.set(rowIndex, outcomes[k]));
       return { analysis: analyze(input.rows, input.threshold, ai), threshold: input.threshold };
     },
     [aiSettings, askAi],

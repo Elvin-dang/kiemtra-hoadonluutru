@@ -47,7 +47,8 @@ export type SheetColumn = { index: number; letter: string; header: string };
 export type AiLimits = { maxTexts: number; maxTextLength: number; concurrency: number };
 
 // Per-browser AI preferences, saved in localStorage.
-export type AiSettings = AiLimits & { isEnabled: boolean };
+// isPrecheckEnabled: send only texts that could hold a date (see mightHaveDate).
+export type AiSettings = AiLimits & { isEnabled: boolean; isPrecheckEnabled: boolean };
 
 // What a platform answers for one batch of texts sent to AI.
 export type AiAnswer =

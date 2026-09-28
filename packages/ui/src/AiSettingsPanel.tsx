@@ -72,6 +72,21 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
         </span>
       </label>
 
+      <label className="mt-4 flex items-center gap-3 text-sm">
+        <Switch
+          checked={settings.isPrecheckEnabled}
+          disabled={!settings.isEnabled}
+          onCheckedChange={(isPrecheckEnabled) => onChange({ ...settings, isPrecheckEnabled })}
+        />
+        <span>
+          <span className="font-medium">Chỉ gửi AI khi nội dung có thể chứa ngày</span>
+          <span className="block text-muted-foreground">
+            Bỏ qua các dòng như "Thuê phòng nghỉ" hay "Thuê phòng nghỉ (504)" — không có ngày nên AI cũng không tìm
+            được; nhập ngày cho các dòng này ngay trong bảng.
+          </span>
+        </span>
+      </label>
+
       <AiKeyFields />
 
       <div className="mt-4 grid gap-4 sm:grid-cols-3">

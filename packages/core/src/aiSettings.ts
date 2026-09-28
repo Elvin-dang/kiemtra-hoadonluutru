@@ -1,6 +1,12 @@
 import type { AiLimits, AiSettings } from "./types";
 
-export const DEFAULT_AI_SETTINGS: AiSettings = { isEnabled: true, maxTexts: 50, maxTextLength: 500, concurrency: 5 };
+export const DEFAULT_AI_SETTINGS: AiSettings = {
+  isEnabled: true,
+  isPrecheckEnabled: true,
+  maxTexts: 50,
+  maxTextLength: 500,
+  concurrency: 5,
+};
 
 const STORAGE_KEY = "kiemtra-hoadon:ai-settings";
 const FIELDS = ["maxTexts", "maxTextLength", "concurrency"] as const;
@@ -16,7 +22,12 @@ function pick(value: unknown, field: string): unknown {
 // Whole numbers from 1 up to the server limit; anything else falls back to the (clamped) default.
 export function sanitizeSettings(value: unknown, limits: AiLimits): AiSettings {
   const isEnabled = pick(value, "isEnabled");
-  const result = { ...DEFAULT_AI_SETTINGS, isEnabled: typeof isEnabled === "boolean" ? isEnabled : true };
+  const isPrecheckEnabled = pick(value, "isPrecheckEnabled");
+  const result = {
+    ...DEFAULT_AI_SETTINGS,
+    isEnabled: typeof isEnabled === "boolean" ? isEnabled : true,
+    isPrecheckEnabled: typeof isPrecheckEnabled === "boolean" ? isPrecheckEnabled : true,
+  };
   for (const field of FIELDS) {
     const candidate = pick(value, field);
     const isValid = typeof candidate === "number" && Number.isInteger(candidate) && candidate >= 1;

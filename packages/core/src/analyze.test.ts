@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { formatDate } from "./formatDate";
 
-import { analyze, needsAi, onlyWarnings, setManualCheckout } from "./analyze";
+import { analyze, mightHaveDate, needsAi, onlyWarnings, setManualCheckout } from "./analyze";
 import { inspectInput, readRows } from "./workbook";
 
 import type { InputRow } from "./types";
@@ -142,5 +142,23 @@ describe("setManualCheckout", () => {
     const analysis = analyze([row({ invoiceDate: "không rõ" })], 1);
     const fixed = setManualCheckout(analysis, 1, new Date(Date.UTC(2025, 3, 30)), 1);
     expect(fixed.results[0]).toMatchObject({ status: "Không xác định", note: "Ngày hóa đơn không hợp lệ" });
+  });
+});
+
+describe("mightHaveDate (pre-check before AI)", () => {
+  it.each(["Thuê phòng nghỉ", "Thuê phòng nghỉ (504)", "Phòng 601", "Dịch vụ giặt ủi", ""])("skips %j", (text) => {
+    expect(mightHaveDate(text)).toBe(false);
+  });
+
+  it.each([
+    "Lưu trú đêm 12-13/3 P.1604",
+    "Thuê phòng 2 đêm",
+    "Ngày 5 tháng Năm",
+    "Check-out tomorrow",
+    "Stay May 3 to May 5",
+    "Phòng 504 từ 12",
+    "ĐÊM THỨ BẢY",
+  ])("sends %j", (text) => {
+    expect(mightHaveDate(text)).toBe(true);
   });
 });

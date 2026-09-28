@@ -17,6 +17,7 @@ describe("sanitizeSettings", () => {
   it("keeps whole numbers within 1..limit", () => {
     expect(sanitizeSettings({ isEnabled: false, maxTexts: 20, maxTextLength: 300, concurrency: 1 }, LIMITS)).toEqual({
       isEnabled: false,
+      isPrecheckEnabled: true,
       maxTexts: 20,
       maxTextLength: 300,
       concurrency: 1,
@@ -26,6 +27,7 @@ describe("sanitizeSettings", () => {
   it("clamps values above the server limit", () => {
     expect(sanitizeSettings({ maxTexts: 9999, maxTextLength: 9999, concurrency: 50 }, LIMITS)).toEqual({
       isEnabled: true,
+      isPrecheckEnabled: true,
       ...LIMITS,
     });
   });
@@ -40,6 +42,7 @@ describe("sanitizeSettings", () => {
   it("never returns a default above a lowered server limit", () => {
     expect(sanitizeSettings(null, { maxTexts: 10, maxTextLength: 200, concurrency: 2 })).toEqual({
       isEnabled: true,
+      isPrecheckEnabled: true,
       maxTexts: 10,
       maxTextLength: 200,
       concurrency: 2,
@@ -49,12 +52,13 @@ describe("sanitizeSettings", () => {
 
 describe("defaults", () => {
   it("turns AI on and keeps the conservative 50 rows / 5 parallel", () => {
-    expect(DEFAULT_AI_SETTINGS).toEqual({ isEnabled: true, maxTexts: 50, maxTextLength: 500, concurrency: 5 });
+    expect(DEFAULT_AI_SETTINGS).toEqual({ isEnabled: true, isPrecheckEnabled: true, maxTexts: 50, maxTextLength: 500, concurrency: 5 });
   });
 
   it("allows up to 1000 rows and 10 parallel requests when the server permits it", () => {
     expect(sanitizeSettings({ isEnabled: true, maxTexts: 1000, maxTextLength: 500, concurrency: 10 }, LIMITS)).toEqual({
       isEnabled: true,
+      isPrecheckEnabled: true,
       maxTexts: 1000,
       maxTextLength: 500,
       concurrency: 10,
@@ -65,8 +69,14 @@ describe("defaults", () => {
 describe("loadSettings / saveSettings", () => {
   it("round-trips through storage", () => {
     const storage = memoryStorage();
-    saveSettings({ isEnabled: false, maxTexts: 10, maxTextLength: 200, concurrency: 2 }, storage);
-    expect(loadSettings(LIMITS, storage)).toEqual({ isEnabled: false, maxTexts: 10, maxTextLength: 200, concurrency: 2 });
+    saveSettings({ isEnabled: false, isPrecheckEnabled: false, maxTexts: 10, maxTextLength: 200, concurrency: 2 }, storage);
+    expect(loadSettings(LIMITS, storage)).toEqual({
+      isEnabled: false,
+      isPrecheckEnabled: false,
+      maxTexts: 10,
+      maxTextLength: 200,
+      concurrency: 2,
+    });
   });
 
   it("uses defaults when storage is missing, empty or holds invalid JSON", () => {
