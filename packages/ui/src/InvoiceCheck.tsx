@@ -10,10 +10,9 @@ import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { usePlatform } from "./platform";
 import { ResultsView } from "./ResultsView";
-import { UpdateNotice } from "./UpdateNotice";
 import { useAiSettings } from "./useAiSettings";
 import { useInvoiceCheck } from "./useInvoiceCheck";
-import { VersionFooter } from "./VersionFooter";
+import { VersionBadge } from "./VersionBadge";
 
 import type { ChangeEvent } from "react";
 
@@ -66,10 +65,11 @@ export function InvoiceCheck() {
 
   return (
     <main className="flex w-full flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
-      <UpdateNotice />
-
       <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold">Kiểm tra thời điểm lập hóa đơn lưu trú</h1>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h1 className="text-2xl font-bold">Kiểm tra thời điểm lập hóa đơn lưu trú</h1>
+          <VersionBadge />
+        </div>
         <p className="text-muted-foreground">
           Tải lên file Excel xuất hóa đơn điện tử bán ra. Hệ thống tìm ngày check-out và cảnh báo hóa đơn lập trễ.
         </p>
@@ -161,8 +161,6 @@ export function InvoiceCheck() {
       {state.phase === "done" && <ResultsView key={state.runId} analysis={state.analysis} />}
 
       {state.phase === "batch" && <BatchResults items={state.items} isRunning={state.isRunning} />}
-
-      <VersionFooter />
     </main>
   );
 }
