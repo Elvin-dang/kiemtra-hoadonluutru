@@ -17,6 +17,8 @@ type ResultTableProps = {
   onSort: (column: ColumnId) => void;
   onToggleRow: (stt: number) => void;
   onEditCheckout?: (stt: number, checkout: Date) => void;
+  // Bumped by "Nhập ngày còn thiếu": open the date box of the first dateless row shown.
+  editRequest?: number;
 };
 
 const STATUS_TONE: Record<Status, string> = {
@@ -120,8 +122,22 @@ function CheckoutCell({ row, isEditing, onStartEdit, onDone }: CheckoutCellProps
   );
 }
 
-export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggleRow, onEditCheckout }: ResultTableProps) {
+export function ResultTable({
+  rows,
+  columns,
+  sort,
+  expandedRows,
+  onSort,
+  onToggleRow,
+  onEditCheckout,
+  editRequest,
+}: ResultTableProps) {
   const [editingStt, setEditingStt] = useState<number | null>(null);
+  const [handledRequest, setHandledRequest] = useState(editRequest);
+  if (editRequest !== handledRequest) {
+    setHandledRequest(editRequest);
+    setEditingStt(rows.find((row) => !row.checkout)?.stt ?? null);
+  }
 
   // Enter moves straight to the next row on this page that still has no date.
   const handleEditDone = (stt: number, checkout: Date | null, isEnter: boolean) => {
@@ -189,7 +205,9 @@ export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggl
                   return (
                     <TableCell
                       key={column.id}
-                      title={column.isLongText && !isExpanded ? text : undefined}
+                      title={
+                        column.id === "status" ? row.note || undefined : column.isLongText && !isExpanded ? text : undefined
+                      }
                       className={cn(
                         column.isNumeric && "tabular-nums",
                         column.id === "status" && STATUS_TONE[row.status],
@@ -204,6 +222,13 @@ export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggl
                           onStartEdit={() => setEditingStt(row.stt)}
                           onDone={(checkout, isEnter) => handleEditDone(row.stt, checkout, isEnter)}
                         />
+                      ) : column.id === "status" && row.status === "Không xác định" && row.note ? (
+                        <span className="flex flex-col">
+                          {text}
+                          <span className="max-w-48 text-xs font-normal whitespace-normal text-muted-foreground">
+                            {row.note}
+                          </span>
+                        </span>
                       ) : column.isLongText ? (
                         <span className={cn(!isExpanded && "line-clamp-2")}>{text}</span>
                       ) : (

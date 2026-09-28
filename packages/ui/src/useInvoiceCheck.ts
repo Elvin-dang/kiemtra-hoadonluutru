@@ -97,6 +97,8 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [aiProgress, setAiProgress] = useState<AiProgress | null>(null);
   const [invoiceFill, setInvoiceFill] = useState<InvoiceFill | null>(null);
+  // The result on screen (with any typed dates) has not been written to Excel yet.
+  const [isUnsaved, setIsUnsaved] = useState(false);
   const stopRef = useRef<AbortController | null>(null);
 
   const check = useCallback(
@@ -138,6 +140,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       try {
         const { analysis, threshold } = await check(workbook, mapping, startRun());
         setState({ phase: "done", runId: Date.now(), source, analysis, threshold });
+        setIsUnsaved(true);
       } catch (error) {
         setAiProgress(null);
         setState({ phase: "error", message: errorMessage(error) });
@@ -242,6 +245,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       rememberManualDates([row], checkout);
       const analysis = setManualCheckout(state.analysis, stt, checkout, state.threshold);
       setState({ ...state, analysis });
+      setIsUnsaved(true);
       const others = sameInvoiceWithoutDate(analysis, stt);
       setInvoiceFill(
         others.length > 0 ? { invoiceNo: String(row.invoiceNo ?? ""), checkout, stts: others.map((o) => o.stt) } : null,
@@ -259,15 +263,17 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       state.analysis,
     );
     setState({ ...state, analysis });
+    setIsUnsaved(true);
     setInvoiceFill(null);
   }, [state, invoiceFill]);
 
   const handleDismissInvoiceFill = useCallback(() => setInvoiceFill(null), []);
 
-  const save = useCallback(async (write: () => Promise<{ savedTo: string | null }>) => {
+  const save = useCallback(async (write: () => Promise<{ savedTo: string | null }>, isFullResult = true) => {
     try {
       const outcome = await write();
       if (outcome.savedTo) setSavedTo(outcome.savedTo);
+      if (outcome.savedTo && isFullResult) setIsUnsaved(false);
       setSaveError(null);
     } catch (error) {
       setSaveError(`Không lưu được file: ${String(error)}`);
@@ -293,8 +299,10 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
   const handleSaveWarnings = useCallback(async () => {
     if (state.phase !== "done") return;
     const { analysis, source } = state;
-    await save(async () =>
-      platform.saveResult(await buildWorkbook(onlyWarnings(analysis), source.name), warningsFileName(source.name), source),
+    await save(
+      async () =>
+        platform.saveResult(await buildWorkbook(onlyWarnings(analysis), source.name), warningsFileName(source.name), source),
+      false,
     );
   }, [state, platform, save]);
 
@@ -302,6 +310,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
     state,
     savedTo,
     saveError,
+    isUnsaved,
     aiProgress,
     openFiles,
     handleConfirmMapping,

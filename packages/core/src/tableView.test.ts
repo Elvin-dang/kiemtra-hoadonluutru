@@ -39,6 +39,7 @@ describe("columns", () => {
     expect(TABLE_COLUMNS.map((c) => c.id).slice(0, 4)).toEqual(["stt", "invoiceNo", "status", "delay"]);
     expect(DEFAULT_VISIBLE_COLUMNS).not.toContain("taxCode");
     expect(DEFAULT_VISIBLE_COLUMNS).not.toContain("method");
+    expect(DEFAULT_VISIBLE_COLUMNS).not.toContain("note");
     expect(DEFAULT_VISIBLE_COLUMNS).toContain("info");
   });
 });

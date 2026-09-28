@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SearchIcon, XIcon } from "lucide-react";
+import { PencilIcon, SearchIcon, XIcon } from "lucide-react";
 import { cn } from "cn";
 
 import {
@@ -52,6 +52,8 @@ export function ResultsView({
   onDismissInvoiceFill,
 }: ResultsViewProps) {
   const [mode, setMode] = useState<Mode>("rows");
+  const [editRequest, setEditRequest] = useState(0);
+  const missingDates = analysis.results.filter((row) => !row.checkout).length;
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>(null);
@@ -80,6 +82,15 @@ export function ResultsView({
   const handleFilter = (filter: StatusFilter) => {
     setStatusFilter((current) => (current === filter ? "all" : filter));
     setPage(1);
+  };
+  // Straight to the rows that need a date, with the first date box already open.
+  const handleFillMissing = () => {
+    setMode("rows");
+    setStatusFilter("Không xác định");
+    setSearch("");
+    setSort(null);
+    setPage(1);
+    setEditRequest((request) => request + 1);
   };
   const handleSearch = (value: string) => {
     setSearch(value);
@@ -133,7 +144,13 @@ export function ResultsView({
             </Button>
           ))}
         </div>
-        <div className="relative w-full sm:w-96">
+        {onEditCheckout && missingDates > 0 && (
+          <Button onClick={handleFillMissing}>
+            <PencilIcon />
+            Nhập ngày còn thiếu ({missingDates})
+          </Button>
+        )}
+        <div className="relative w-full sm:w-72">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
@@ -187,6 +204,7 @@ export function ResultsView({
             onSort={handleSort}
             onToggleRow={handleToggleRow}
             onEditCheckout={onEditCheckout}
+            editRequest={editRequest}
           />
 
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">

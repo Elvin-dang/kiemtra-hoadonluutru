@@ -5,7 +5,10 @@ import { useState } from "react";
 import { aiCacheSize, clearAiCache } from "@kiemtra/core";
 
 import { AiKeyFields } from "./AiKeyFields";
-import { Button } from "./components/ui/button";
+import { SettingsIcon } from "lucide-react";
+
+import { Button, buttonVariants } from "./components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
 import { Input } from "./components/ui/input";
 import { Switch } from "./components/ui/switch";
 import { usePlatform } from "./platform";
@@ -54,82 +57,88 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
   };
 
   return (
-    <details className="rounded-lg border p-4" onToggle={() => setCacheSize(aiCacheSize())}>
-      <summary className="cursor-pointer font-medium">
-        Cài đặt AI{" "}
+    <Popover onOpenChange={(isOpen) => isOpen && setCacheSize(aiCacheSize())}>
+      <PopoverTrigger className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <SettingsIcon />
+        Cài đặt AI
         <span className={settings.isEnabled ? "text-green-700" : "text-muted-foreground"}>
-          — {settings.isEnabled ? "Đang bật" : "Đang tắt"}
+          · {settings.isEnabled ? "Bật" : "Tắt"}
         </span>
-      </summary>
-
-      <label className="mt-4 flex items-center gap-3 text-sm">
-        <Switch checked={settings.isEnabled} onCheckedChange={(isEnabled) => onChange({ ...settings, isEnabled })} />
-        <span>
-          <span className="font-medium">Dùng AI cho dòng không đọc được</span>
-          <span className="block text-muted-foreground">
-            Khi tắt, các dòng này được đánh dấu để kiểm tra thủ công và không có dữ liệu nào được gửi tới AI.
-          </span>
-        </span>
-      </label>
-
-      <label className="mt-4 flex items-center gap-3 text-sm">
-        <Switch
-          checked={settings.isPrecheckEnabled}
-          disabled={!settings.isEnabled}
-          onCheckedChange={(isPrecheckEnabled) => onChange({ ...settings, isPrecheckEnabled })}
-        />
-        <span>
-          <span className="font-medium">Chỉ gửi AI khi nội dung có thể chứa ngày</span>
-          <span className="block text-muted-foreground">
-            Bỏ qua các dòng như "Thuê phòng nghỉ" hay "Thuê phòng nghỉ (504)" — không có ngày nên AI cũng không tìm
-            được; nhập ngày cho các dòng này ngay trong bảng.
-          </span>
-        </span>
-      </label>
-
-      <AiKeyFields />
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        {FIELDS.map(({ field, label, hint }) => (
-          <label key={field} className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{label}</span>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={limits[field]}
-              step={1}
-              disabled={!settings.isEnabled}
-              value={drafts[field]}
-              onChange={(event) => handleChange(field, event.target.value)}
-              onBlur={() => setDrafts(toDrafts(settings))}
-            />
-            <span className="text-muted-foreground">
-              Từ 1 đến {limits[field]}. {hint}
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="max-h-[80vh] w-[min(56rem,calc(100vw-2rem))] gap-0 overflow-y-auto p-5"
+      >
+        <p className="font-medium">Cài đặt AI</p>
+        <label className="mt-4 flex items-center gap-3 text-sm">
+          <Switch checked={settings.isEnabled} onCheckedChange={(isEnabled) => onChange({ ...settings, isEnabled })} />
+          <span>
+            <span className="font-medium">Dùng AI cho dòng không đọc được</span>
+            <span className="block text-muted-foreground">
+              Khi tắt, các dòng này được đánh dấu để kiểm tra thủ công và không có dữ liệu nào được gửi tới AI.
             </span>
-          </label>
-        ))}
-      </div>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button variant="outline" disabled={!settings.isEnabled} onClick={onReset}>
-          Khôi phục mặc định
-        </Button>
-        <Button
-          variant="outline"
-          disabled={cacheSize === 0}
-          onClick={() => {
-            clearAiCache();
-            setCacheSize(0);
-          }}
-        >
-          Xóa bộ nhớ AI ({cacheSize.toLocaleString("vi-VN")})
-        </Button>
-        <p className="text-sm text-muted-foreground">
-          {kind === "desktop"
-            ? "Lưu trên máy này. Ngày AI đã tìm được được nhớ lại, nên nội dung đã gặp không phải hỏi AI lần nữa."
-            : "Lưu trên trình duyệt này và gửi kèm dữ liệu tới máy chủ. Máy chủ không cho vượt giới hạn trên."}
-        </p>
-      </div>
-    </details>
+          </span>
+        </label>
+
+        <label className="mt-4 flex items-center gap-3 text-sm">
+          <Switch
+            checked={settings.isPrecheckEnabled}
+            disabled={!settings.isEnabled}
+            onCheckedChange={(isPrecheckEnabled) => onChange({ ...settings, isPrecheckEnabled })}
+          />
+          <span>
+            <span className="font-medium">Chỉ gửi AI khi nội dung có thể chứa ngày</span>
+            <span className="block text-muted-foreground">
+              Bỏ qua các dòng như "Thuê phòng nghỉ" hay "Thuê phòng nghỉ (504)" — không có ngày nên AI cũng không tìm
+              được; nhập ngày cho các dòng này ngay trong bảng.
+            </span>
+          </span>
+        </label>
+
+        <AiKeyFields />
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          {FIELDS.map(({ field, label, hint }) => (
+            <label key={field} className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">{label}</span>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={limits[field]}
+                step={1}
+                disabled={!settings.isEnabled}
+                value={drafts[field]}
+                onChange={(event) => handleChange(field, event.target.value)}
+                onBlur={() => setDrafts(toDrafts(settings))}
+              />
+              <span className="text-muted-foreground">
+                Từ 1 đến {limits[field]}. {hint}
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button variant="outline" disabled={!settings.isEnabled} onClick={onReset}>
+            Khôi phục mặc định
+          </Button>
+          <Button
+            variant="outline"
+            disabled={cacheSize === 0}
+            onClick={() => {
+              clearAiCache();
+              setCacheSize(0);
+            }}
+          >
+            Xóa bộ nhớ AI ({cacheSize.toLocaleString("vi-VN")})
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            {kind === "desktop"
+              ? "Lưu trên máy này. Ngày AI đã tìm được được nhớ lại, nên nội dung đã gặp không phải hỏi AI lần nữa."
+              : "Lưu trên trình duyệt này và gửi kèm dữ liệu tới máy chủ. Máy chủ không cho vượt giới hạn trên."}
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

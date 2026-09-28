@@ -14,6 +14,10 @@
 - Xem kết quả "Theo khách hàng": khách nào có nhiều hóa đơn cảnh báo nhất.
 - Số yêu cầu song song trên 50 nay được dùng đầy đủ.
 - Số phiên bản và cập nhật gọn trong một nút ở góc trên.
+- Giao diện gọn hơn: màn hình đầu là vùng kéo thả file; Cài đặt AI chuyển vào nút ⚙ ở góc trên; mô tả chỉ hiện ở màn hình đầu.
+- Nút "Nhập ngày còn thiếu (n)" lọc ngay các dòng chưa có ngày và mở ô nhập đầu tiên.
+- Cột "Ghi chú" ẩn mặc định; lý do hiện ngay dưới "Không xác định" và khi rê chuột vào trạng thái.
+- Dấu "Chưa lưu" khi kết quả (hoặc ngày vừa nhập) chưa được lưu ra Excel.
 
 ## 1.1.0 — 2026-09-28
 - Tự động cập nhật: khi có phiên bản mới, ứng dụng hỏi trước rồi tự tải và khởi động lại.

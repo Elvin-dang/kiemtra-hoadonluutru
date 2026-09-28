@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect } from "react";
+import { UploadIcon } from "lucide-react";
 
 import { AiProgressBar } from "./AiProgressBar";
 import { AiSettingsPanel } from "./AiSettingsPanel";
@@ -25,6 +26,7 @@ export function InvoiceCheck() {
     state,
     savedTo,
     saveError,
+    isUnsaved,
     aiProgress,
     openFiles,
     handleConfirmMapping,
@@ -40,6 +42,7 @@ export function InvoiceCheck() {
   } = useInvoiceCheck(ai.settings);
   const isProcessing = state.phase === "processing" || (state.phase === "batch" && state.isRunning);
   const isDone = state.phase === "done";
+  const isStart = state.phase === "idle";
   const warnCount = state.phase === "done" ? state.analysis.counts.warn : 0;
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -74,50 +77,80 @@ export function InvoiceCheck() {
   return (
     <main className="flex w-full flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
       <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">Kiểm tra thời điểm lập hóa đơn lưu trú</h1>
-          <VersionBadge />
+          <div className="flex items-center gap-1">
+            <AiSettingsPanel
+              settings={ai.settings}
+              limits={ai.limits}
+              onChange={ai.updateSettings}
+              onReset={ai.resetSettings}
+            />
+            <VersionBadge />
+          </div>
         </div>
-        <p className="text-muted-foreground">
-          Tải lên file Excel xuất hóa đơn điện tử bán ra. Hệ thống tìm ngày check-out và cảnh báo hóa đơn lập trễ.
-        </p>
-        <p className="text-sm text-muted-foreground">{platform.privacyNotice}</p>
-      </header>
-
-      <div className="flex flex-wrap items-center gap-3">
-        {platform.pickFiles ? (
-          <Button variant="outline" disabled={isProcessing} onClick={handlePick} title="Ctrl+O">
-            Chọn file Excel
-          </Button>
-        ) : (
-          <Input
-            type="file"
-            accept=".xlsx,.xlsm"
-            aria-label="Chọn file Excel"
-            multiple
-            className="max-w-sm"
-            disabled={isProcessing}
-            onChange={(event) => void handleChange(event)}
-          />
-        )}
-        {isDone && (
+        {isStart && (
           <>
-            <Button onClick={() => void handleSave()} title="Ctrl+S">
-              {platform.kind === "desktop" ? "Lưu kết quả" : "Tải kết quả"}
-            </Button>
-            {platform.saveResultAs && (
-              <Button variant="outline" onClick={() => void handleSaveAs()} title="Ctrl+Shift+S">
-                Lưu thành…
-              </Button>
-            )}
-            {warnCount > 0 && (
-              <Button variant="outline" onClick={() => void handleSaveWarnings()}>
-                Lưu Cảnh báo ({warnCount})
-              </Button>
-            )}
+            <p className="text-muted-foreground">
+              Mở file Excel xuất hóa đơn điện tử bán ra. Ứng dụng tìm ngày check-out và cảnh báo hóa đơn lập trễ.
+            </p>
+            <p className="text-sm text-muted-foreground">{platform.privacyNotice}</p>
           </>
         )}
-      </div>
+      </header>
+
+      {isStart && platform.pickFiles ? (
+        <button
+          type="button"
+          onClick={handlePick}
+          className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors hover:border-foreground/40 hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          <UploadIcon className="size-8 text-muted-foreground" />
+          <span className="text-lg font-medium">Kéo thả file Excel vào đây, hoặc bấm để chọn</span>
+          <span className="text-sm text-muted-foreground">Có thể chọn nhiều file cùng lúc · Ctrl+O</span>
+        </button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          {platform.pickFiles ? (
+            <Button variant="outline" disabled={isProcessing} onClick={handlePick} title="Ctrl+O">
+              Chọn file Excel
+            </Button>
+          ) : (
+            <Input
+              type="file"
+              accept=".xlsx,.xlsm"
+              aria-label="Chọn file Excel"
+              multiple
+              className="max-w-sm"
+              disabled={isProcessing}
+              onChange={(event) => void handleChange(event)}
+            />
+          )}
+          {isDone && (
+            <>
+              <Button onClick={() => void handleSave()} title="Ctrl+S">
+                {platform.kind === "desktop" ? "Lưu kết quả" : "Tải kết quả"}
+              </Button>
+              {platform.saveResultAs && (
+                <Button variant="outline" onClick={() => void handleSaveAs()} title="Ctrl+Shift+S">
+                  Lưu thành…
+                </Button>
+              )}
+              {warnCount > 0 && (
+                <Button variant="outline" onClick={() => void handleSaveWarnings()}>
+                  Lưu Cảnh báo ({warnCount})
+                </Button>
+              )}
+              {isUnsaved && (
+                <span className="flex items-center gap-1.5 text-sm text-amber-700">
+                  <span aria-hidden className="size-2 rounded-full bg-amber-500" />
+                  Chưa lưu
+                </span>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {savedTo && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -139,13 +172,6 @@ export function InvoiceCheck() {
           <AlertDescription>{saveError}</AlertDescription>
         </Alert>
       )}
-
-      <AiSettingsPanel
-        settings={ai.settings}
-        limits={ai.limits}
-        onChange={ai.updateSettings}
-        onReset={ai.resetSettings}
-      />
 
       {state.phase === "processing" && !aiProgress && <p className="text-muted-foreground">Đang xử lý…</p>}
       {aiProgress && <AiProgressBar progress={aiProgress} onStop={handleStopAi} />}

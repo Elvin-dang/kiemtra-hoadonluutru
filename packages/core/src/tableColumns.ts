@@ -53,7 +53,8 @@ export const TABLE_COLUMNS: TableColumn[] = [
   { id: "info", label: "Thông tin lưu trú", isDefaultVisible: true, isLongText: true, sortValue: (r) => r.info || null },
   { id: "taxCode", label: "Mã số thuế", isDefaultVisible: false, sortValue: (r) => textOrNull(r.taxCode) },
   { id: "method", label: "Phương pháp", isDefaultVisible: false, sortValue: (r) => r.method },
-  { id: "note", label: "Ghi chú", isDefaultVisible: true, isLongText: true, sortValue: (r) => r.note || null },
+  // Hidden by default: the table shows the note under "Không xác định" and as the status tooltip.
+  { id: "note", label: "Ghi chú", isDefaultVisible: false, isLongText: true, sortValue: (r) => r.note || null },
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: ColumnId[] = TABLE_COLUMNS.filter((c) => c.isDefaultVisible).map((c) => c.id);
