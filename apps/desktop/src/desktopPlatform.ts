@@ -1,21 +1,52 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
+import changelog from "../CHANGELOG.md?raw";
 import { toAiAnswer } from "./aiAnswer";
 
 import type { AiLimits } from "@kiemtra/core";
-import type { Platform, SaveOutcome, SourceFile } from "@kiemtra/ui";
+import type { Platform, SaveOutcome, SourceFile, UpdateInfo } from "@kiemtra/ui";
 import type { RustAnswer } from "./aiAnswer";
 
 // Same ceilings as the website's server defaults; the user's own settings apply within them.
 const LOCAL_LIMITS: AiLimits = { maxTexts: 100000, maxTextLength: 1000, concurrency: 100 };
 const EXCEL_FILTER = [{ name: "Excel", extensions: ["xlsx", "xlsm"] }];
 const EXCEL_PATH = /\.xls[xm]$/i;
+const LAST_DIR_KEY = "kiemtra-hoadon:last-dir";
 
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
+}
+
+// The folder the user last opened a file from; the Open and Save dialogs start there.
+function lastDir(): string | undefined {
+  try {
+    return window.localStorage.getItem(LAST_DIR_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberDir(filePath: string) {
+  const dir = filePath.slice(0, Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\")));
+  try {
+    if (dir) window.localStorage.setItem(LAST_DIR_KEY, dir);
+  } catch {
+    // Storage unavailable: dialogs just open in the default folder.
+  }
+}
+
+function inLastDir(fileName: string): string {
+  const dir = lastDir();
+  return dir ? `${dir}${dir.includes("\\") ? "\\" : "/"}${fileName}` : fileName;
+}
+
+function readSources(paths: string[]): Promise<SourceFile[]> {
+  if (paths[0]) rememberDir(paths[0]);
+  return Promise.all(paths.map(readSource));
 }
 
 async function readSource(path: string): Promise<SourceFile> {
@@ -41,7 +72,7 @@ function toBytes(data: ArrayBuffer): number[] {
 }
 
 async function saveAs(data: ArrayBuffer, fileName: string): Promise<SaveOutcome> {
-  const path = await save({ defaultPath: fileName, filters: EXCEL_FILTER });
+  const path = await save({ defaultPath: inLastDir(fileName), filters: EXCEL_FILTER });
   if (!path) return { savedTo: null };
   await invoke("save_as", { path, bytes: toBytes(data) });
   return { savedTo: path };
@@ -60,19 +91,20 @@ export const desktopPlatform: Platform = {
   },
   saveResultAs: saveAs,
   revealFile: (path) => revealItemInDir(path),
-  pickFile: async () => {
-    const path = await open({ multiple: false, directory: false, filters: EXCEL_FILTER });
-    return typeof path === "string" ? readSource(path) : null;
+  openResult: (path) => invoke("open_result", { path }),
+  pickFiles: async () => {
+    const paths = await open({ multiple: true, directory: false, filters: EXCEL_FILTER, defaultPath: lastDir() });
+    return paths ? readSources(paths) : [];
   },
-  onExternalFile: (handler) => {
+  onExternalFiles: (handler) => {
     let isActive = true;
     let unlisten: () => void = () => {};
     // Register the drop listener first, so a startup-file failure can never block it.
     void (async () => {
       const stop = await getCurrentWebview().onDragDropEvent((event) => {
         if (event.payload.type !== "drop") return;
-        const path = event.payload.paths.find((candidate) => EXCEL_PATH.test(candidate));
-        if (path) handler(readSource(path));
+        const paths = event.payload.paths.filter((candidate) => EXCEL_PATH.test(candidate));
+        if (paths.length > 0) handler(readSources(paths));
       });
       if (isActive) unlisten = stop;
       else stop();
@@ -80,7 +112,7 @@ export const desktopPlatform: Platform = {
     void getStartupFile().then((path) => {
       if (path && isActive && !startupTaken) {
         startupTaken = true;
-        handler(readSource(path));
+        handler(readSources([path]));
       }
     });
     return () => {
@@ -99,5 +131,11 @@ export const desktopPlatform: Platform = {
   aiModel: {
     get: () => invoke<string>("get_model"),
     set: (model) => invoke("set_model", { model }),
+  },
+  app: {
+    version: getVersion,
+    changelog,
+    checkUpdate: () => invoke<UpdateInfo | null>("check_update"),
+    installUpdate: () => invoke("install_update"),
   },
 };

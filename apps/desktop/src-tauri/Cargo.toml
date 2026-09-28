@@ -1,6 +1,6 @@
 [package]
 name = "kiemtra-hoadon"
-version = "1.0.0"
+version = "1.1.0"
 description = "Kiểm tra hóa đơn lưu trú"
 edition = "2021"
 
@@ -20,6 +20,9 @@ serde_json = "1"
 reqwest = { version = "0.13", features = ["json"] }
 keyring = { version = "3.6", features = ["windows-native", "apple-native"] }
 futures = "0.3"
+minisign-verify = "0.3.0"
+base64 = "0.23.1"
+tokio = { version = "1.53.1", features = ["time"] }
 
 [profile.release]
 opt-level = "s"

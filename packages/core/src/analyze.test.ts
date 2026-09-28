@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { formatDate } from "./formatDate";
 
-import { analyze, needsAi } from "./analyze";
+import { analyze, needsAi, onlyWarnings } from "./analyze";
 import { inspectInput, readRows } from "./workbook";
 
 import type { InputRow } from "./types";
@@ -111,5 +111,18 @@ describe("needsAi", () => {
   it("returns indices of non-empty descriptions the rules cannot parse", () => {
     const rows = [row({}), row({ info: "Phòng 1604" }), row({ info: "  " }), row({ info: "không có ngày" })];
     expect(needsAi(rows)).toEqual([1, 3]);
+  });
+});
+
+describe("onlyWarnings", () => {
+  it("keeps the Cảnh báo rows with their original STT and recounts", () => {
+    const analysis = analyze([
+      row({ info: "(30/04/2025-02/05/2025)", invoiceDate: "02/05/2025" }),
+      row({ info: "(30/04/2025-02/05/2025)", invoiceDate: "20/05/2025" }),
+      row({ info: "" }),
+    ], 1);
+    const warnings = onlyWarnings(analysis);
+    expect(warnings.results.map((r) => [r.stt, r.status])).toEqual([[2, "Cảnh báo"]]);
+    expect(warnings.counts).toEqual({ total: 1, ok: 0, warn: 1, unknown: 0 });
   });
 });

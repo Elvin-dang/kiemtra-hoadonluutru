@@ -26,11 +26,30 @@ jobs:
       - run: npm run build:vite -w @kiemtra/desktop
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: npm run build:desktop
+      # The app only installs an update whose .sig matches the public key built into it (updater-key.pub).
+      - name: Sign the .exe for self-update
+        working-directory: apps/desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri signer sign src-tauri/target/release/kiemtra-hoadon.exe
+      # Release notes = this version's section of CHANGELOG.md (shown in the app's update banner).
+      - name: Release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## /{on = ($2 == v || $2 == "v" v); next} on' apps/desktop/CHANGELOG.md > release-notes.md
+          cat release-notes.md
       - uses: actions/upload-artifact@v4
         with:
           name: kiemtra-hoadon-windows
-          path: apps/desktop/src-tauri/target/release/kiemtra-hoadon.exe
+          path: |
+            apps/desktop/src-tauri/target/release/kiemtra-hoadon.exe
+            apps/desktop/src-tauri/target/release/kiemtra-hoadon.exe.sig
       - if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: apps/desktop/src-tauri/target/release/kiemtra-hoadon.exe
+          body_path: release-notes.md
+          files: |
+            apps/desktop/src-tauri/target/release/kiemtra-hoadon.exe
+            apps/desktop/src-tauri/target/release/kiemtra-hoadon.exe.sig

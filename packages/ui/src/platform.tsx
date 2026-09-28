@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 export type SourceFile = { name: string; path: string | null; data: ArrayBuffer };
 export type SaveOutcome = { savedTo: string | null };
+export type UpdateInfo = { version: string; notes: string };
 
 // Everything the shared screens need from the app they run in (web or desktop).
 export type Platform = {
@@ -17,10 +18,19 @@ export type Platform = {
   saveResult: (data: ArrayBuffer, fileName: string, source: Pick<SourceFile, "name" | "path">) => Promise<SaveOutcome>;
 
   // Desktop-only capabilities; the web leaves them undefined.
-  pickFile?: () => Promise<SourceFile | null>;
-  onExternalFile?: (handler: (file: Promise<SourceFile>) => void) => () => void;
+  // An empty list means the picker was cancelled.
+  pickFiles?: () => Promise<SourceFile[]>;
+  onExternalFiles?: (handler: (files: Promise<SourceFile[]>) => void) => () => void;
   saveResultAs?: (data: ArrayBuffer, fileName: string) => Promise<SaveOutcome>;
   revealFile?: (path: string) => Promise<void>;
+  openResult?: (path: string) => Promise<void>;
+  app?: {
+    version: () => Promise<string>;
+    changelog: string;
+    checkUpdate: () => Promise<UpdateInfo | null>;
+    // Restarts the app on success.
+    installUpdate: () => Promise<void>;
+  };
   aiKey?: {
     status: () => Promise<string | null>;
     save: (key: string) => Promise<string | null>;

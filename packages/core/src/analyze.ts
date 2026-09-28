@@ -65,3 +65,9 @@ export function analyze(rows: InputRow[], threshold: number, ai: Map<number, AiO
 
   return { results, counts };
 }
+
+// The Cảnh báo rows alone (original STT kept), for a follow-up file.
+export function onlyWarnings({ results }: AnalysisResult): AnalysisResult {
+  const warnings = results.filter((row) => row.status === "Cảnh báo");
+  return { results: warnings, counts: { total: warnings.length, ok: 0, warn: warnings.length, unknown: 0 } };
+}

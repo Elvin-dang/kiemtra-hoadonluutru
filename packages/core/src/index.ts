@@ -4,6 +4,7 @@ export * from "./types";
 export * from "./aiClient";
 export * from "./aiSettings";
 export * from "./analyze";
+export * from "./changelog";
 export * from "./checkout";
 export * from "./columns";
 export * from "./formatDate";

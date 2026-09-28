@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::Manager;
 
+mod update;
+
 pub const PROMPT: &str =
     "Trích xuất ngày kết thúc dịch vụ/check-out từ thông tin lưu trú. Chỉ trả về DD/MM/YYYY hoặc KHONG_XAC_DINH.";
 pub const MAX_OUTPUT_TOKENS: u32 = 1000;
@@ -14,6 +16,7 @@ pub const MAX_OUTPUT_TOKENS: u32 = 1000;
 pub const MAX_TEXTS: usize = 100_000;
 pub const MAX_TEXT_LENGTH: usize = 1000;
 pub const MAX_CONCURRENCY: usize = 100;
+pub const MAX_RETRIES: u32 = 3;
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -85,6 +88,18 @@ pub fn note_for_status(status: u16) -> String {
     }
 }
 
+pub fn is_retryable(status: u16) -> bool {
+    status == 429 || status >= 500
+}
+
+/// Waits 1 s, 2 s, 4 s — or what the server's Retry-After asks for, capped at 30 s.
+pub fn retry_delay(attempt: u32, retry_after: Option<&str>) -> Duration {
+    retry_after
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map(|seconds| Duration::from_secs(seconds.min(30)))
+        .unwrap_or_else(|| Duration::from_secs(1 << attempt))
+}
+
 pub fn next_free_path(dir: &Path, file_name: &str, exists: impl Fn(&Path) -> bool) -> PathBuf {
     let first = dir.join(file_name);
     if !exists(&first) {
@@ -145,6 +160,14 @@ fn save_next_to(source_path: String, file_name: String, bytes: Vec<u8>) -> Resul
     let target = next_free_path(dir, &file_name, |candidate| candidate.exists());
     std::fs::write(&target, bytes).map_err(|error| format!("Không lưu được file: {error}"))?;
     Ok(target.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn open_result(path: String) -> Result<(), String> {
+    if !path.to_lowercase().ends_with(".xlsx") || !Path::new(&path).is_file() {
+        return Err("Không tìm thấy file kết quả".to_string());
+    }
+    tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|error| format!("Không mở được file: {error}"))
 }
 
 #[tauri::command]
@@ -212,16 +235,30 @@ fn set_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
 }
 
 async fn ask_one(client: &reqwest::Client, key: &str, model: &str, text: &str) -> AiItem {
-    let response = match client.post(OPENAI_URL).bearer_auth(key).json(&request_body(model, text)).send().await {
-        Ok(response) => response,
-        Err(_) => return failed("Không gọi được AI"),
-    };
-    if !response.status().is_success() {
-        return failed(note_for_status(response.status().as_u16()));
-    }
-    match response.json::<Value>().await {
-        Ok(payload) => AiItem::Answer { answer: output_text(&payload) },
-        Err(_) => failed("Không gọi được AI"),
+    let mut attempt = 0;
+    loop {
+        let (note, retry_after) = match client.post(OPENAI_URL).bearer_auth(key).json(&request_body(model, text)).send().await {
+            Err(_) => ("Không gọi được AI".to_string(), None),
+            Ok(response) if response.status().is_success() => {
+                return match response.json::<Value>().await {
+                    Ok(payload) => AiItem::Answer { answer: output_text(&payload) },
+                    Err(_) => failed("Không gọi được AI"),
+                };
+            }
+            Ok(response) => {
+                let status = response.status().as_u16();
+                if !is_retryable(status) {
+                    return failed(note_for_status(status));
+                }
+                let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok()).map(str::to_owned);
+                (note_for_status(status), retry_after)
+            }
+        };
+        if attempt >= MAX_RETRIES {
+            return failed(note);
+        }
+        tokio::time::sleep(retry_delay(attempt, retry_after.as_deref())).await;
+        attempt += 1;
     }
 }
 
@@ -252,6 +289,7 @@ async fn ask_ai(app: tauri::AppHandle, texts: Vec<String>, limits: Limits) -> Ai
 pub fn run() {
     let args: Vec<String> = std::env::args().collect();
     let startup = startup_xlsx(&args, |path| path.is_file());
+    update::remove_leftover();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -261,6 +299,9 @@ pub fn run() {
             read_file,
             save_next_to,
             save_as,
+            open_result,
+            update::check_update,
+            update::install_update,
             ai_key_status,
             set_ai_key,
             delete_ai_key,
@@ -309,6 +350,17 @@ mod tests {
         assert_eq!(note_for_status(401), "Khóa OpenAI không hợp lệ");
         assert_eq!(note_for_status(429), "AI HTTP 429");
         assert_eq!(note_for_status(500), "AI HTTP 500");
+    }
+
+    #[test]
+    fn rate_limits_and_server_errors_are_retried_with_backoff() {
+        assert!(is_retryable(429) && is_retryable(500) && is_retryable(503));
+        assert!(!is_retryable(400) && !is_retryable(401));
+        let waits: Vec<u64> = (0..MAX_RETRIES).map(|n| retry_delay(n, None).as_secs()).collect();
+        assert_eq!(waits, [1, 2, 4]);
+        assert_eq!(retry_delay(0, Some("7")), Duration::from_secs(7));
+        assert_eq!(retry_delay(0, Some("600")), Duration::from_secs(30));
+        assert_eq!(retry_delay(1, Some("Wed, 21 Oct 2026 07:28:00 GMT")), Duration::from_secs(2));
     }
 
     #[test]
