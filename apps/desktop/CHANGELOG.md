@@ -3,6 +3,9 @@
 ## 1.2.0 — 2026-09-28
 - Sửa ngày check-out ngay trong bảng (nút bút chì, hoặc "Nhập ngày" ở dòng không xác định); trạng thái, số ngày chậm và file kết quả cập nhật theo.
 - Kiểm tra nội dung trước khi gửi AI: dòng không thể chứa ngày (như "Thuê phòng nghỉ", "Thuê phòng nghỉ (504)") không gửi AI nữa — nhanh hơn, đỡ tốn phí; bật/tắt trong Cài đặt AI.
+- Ngày đã nhập được ghi nhớ theo từng dòng hóa đơn: mở lại file (hoặc file xuất sau có cùng dòng) thì ngày tự điền lại.
+- Sau khi nhập ngày, có thể áp dụng cùng ngày cho các dòng khác chưa có ngày của cùng hóa đơn.
+- Nhấn Enter sau khi nhập ngày để chuyển ngay sang dòng tiếp theo chưa có ngày.
 - Thanh tiến độ khi hỏi AI và nút "Dừng".
 - Nhớ ngày AI đã tìm được: nội dung đã gặp không phải hỏi AI lại (xóa được trong Cài đặt AI).
 - Nút "Kiểm tra khóa" để thử khóa OpenAI và model.

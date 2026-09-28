@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, PencilIcon } from "lucide-react";
 import { cn } from "cn";
 
@@ -62,17 +62,20 @@ type CheckoutCellProps = {
   row: RowResult;
   isEditing: boolean;
   onStartEdit: () => void;
-  onDone: (checkout: Date | null) => void;
+  onDone: (checkout: Date | null, isEnter: boolean) => void;
 };
 
 // Click the pencil (or "Nhập ngày" on an unknown row) to type the check-out date by hand.
 function CheckoutCell({ row, isEditing, onStartEdit, onDone }: CheckoutCellProps) {
   // Enter/Escape close the input, and the blur that follows must not commit a second time.
   const isFinished = useRef(false);
-  const finish = (checkout: Date | null) => {
+  useEffect(() => {
+    if (isEditing) isFinished.current = false;
+  }, [isEditing]);
+  const finish = (checkout: Date | null, isEnter = false) => {
     if (isFinished.current) return;
     isFinished.current = true;
-    onDone(checkout);
+    onDone(checkout, isEnter);
   };
   if (isEditing) {
     return (
@@ -85,7 +88,7 @@ function CheckoutCell({ row, isEditing, onStartEdit, onDone }: CheckoutCellProps
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
           event.stopPropagation();
-          if (event.key === "Enter") finish(fromIsoDate(event.currentTarget.value));
+          if (event.key === "Enter") finish(fromIsoDate(event.currentTarget.value), true);
           if (event.key === "Escape") finish(null);
         }}
         onBlur={(event) => finish(fromIsoDate(event.currentTarget.value))}
@@ -103,7 +106,6 @@ function CheckoutCell({ row, isEditing, onStartEdit, onDone }: CheckoutCellProps
         onKeyDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.stopPropagation();
-          isFinished.current = false;
           onStartEdit();
         }}
         className={cn(
@@ -121,8 +123,11 @@ function CheckoutCell({ row, isEditing, onStartEdit, onDone }: CheckoutCellProps
 export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggleRow, onEditCheckout }: ResultTableProps) {
   const [editingStt, setEditingStt] = useState<number | null>(null);
 
-  const handleEditDone = (stt: number, checkout: Date | null) => {
-    setEditingStt(null);
+  // Enter moves straight to the next row on this page that still has no date.
+  const handleEditDone = (stt: number, checkout: Date | null, isEnter: boolean) => {
+    const index = rows.findIndex((row) => row.stt === stt);
+    const next = isEnter && checkout ? rows.slice(index + 1).find((row) => !row.checkout) : undefined;
+    setEditingStt(next?.stt ?? null);
     if (checkout) onEditCheckout?.(stt, checkout);
   };
 
@@ -197,7 +202,7 @@ export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggl
                           row={row}
                           isEditing={editingStt === row.stt}
                           onStartEdit={() => setEditingStt(row.stt)}
-                          onDone={(checkout) => handleEditDone(row.stt, checkout)}
+                          onDone={(checkout, isEnter) => handleEditDone(row.stt, checkout, isEnter)}
                         />
                       ) : column.isLongText ? (
                         <span className={cn(!isExpanded && "line-clamp-2")}>{text}</span>

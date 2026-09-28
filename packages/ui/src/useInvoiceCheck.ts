@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   analyze,
+  applyManualDates,
   fetchAiOutcomes,
   InputError,
   mightHaveDate,
@@ -11,8 +12,10 @@ import {
   needsAi,
   onlyWarnings,
   recallMapping,
+  rememberManualDates,
   rememberMapping,
   resultTemplate,
+  sameInvoiceWithoutDate,
   setManualCheckout,
   withAiCache,
 } from "@kiemtra/core";
@@ -54,6 +57,9 @@ export type BatchItem = {
   message?: string;
 };
 
+// After a date is typed: the other dateless lines of that invoice, offered the same date.
+export type InvoiceFill = { invoiceNo: string; checkout: Date; stts: number[] };
+
 export type CheckState =
   | { phase: "idle" }
   | { phase: "processing"; fileName: string }
@@ -90,6 +96,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
   const [savedTo, setSavedTo] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [aiProgress, setAiProgress] = useState<AiProgress | null>(null);
+  const [invoiceFill, setInvoiceFill] = useState<InvoiceFill | null>(null);
   const stopRef = useRef<AbortController | null>(null);
 
   const check = useCallback(
@@ -109,7 +116,8 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       setAiProgress(null);
       const ai = new Map<number, AiOutcome>(candidates.map((rowIndex) => [rowIndex, { date: null, note: NO_DATE_NOTE }]));
       aiIndices.forEach((rowIndex, k) => ai.set(rowIndex, outcomes[k]));
-      return { analysis: analyze(input.rows, input.threshold, ai), threshold: input.threshold };
+      const analysis = applyManualDates(analyze(input.rows, input.threshold, ai), input.threshold);
+      return { analysis, threshold: input.threshold };
     },
     [aiSettings, askAi],
   );
@@ -124,6 +132,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
   const runAnalysis = useCallback(
     async (source: SourceRef, workbook: ExcelJS.Workbook, mapping: ColumnMapping) => {
       setState({ phase: "processing", fileName: source.name });
+      setInvoiceFill(null);
       setSavedTo(null);
       setSaveError(null);
       try {
@@ -225,13 +234,35 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
 
   const handleStopAi = useCallback(() => stopRef.current?.abort(), []);
 
-  const handleEditCheckout = useCallback((stt: number, checkout: Date) => {
-    setState((current) =>
-      current.phase === "done"
-        ? { ...current, analysis: setManualCheckout(current.analysis, stt, checkout, current.threshold) }
-        : current,
+  const handleEditCheckout = useCallback(
+    (stt: number, checkout: Date) => {
+      if (state.phase !== "done") return;
+      const row = state.analysis.results.find((candidate) => candidate.stt === stt);
+      if (!row) return;
+      rememberManualDates([row], checkout);
+      const analysis = setManualCheckout(state.analysis, stt, checkout, state.threshold);
+      setState({ ...state, analysis });
+      const others = sameInvoiceWithoutDate(analysis, stt);
+      setInvoiceFill(
+        others.length > 0 ? { invoiceNo: String(row.invoiceNo ?? ""), checkout, stts: others.map((o) => o.stt) } : null,
+      );
+    },
+    [state],
+  );
+
+  const handleApplyInvoiceFill = useCallback(() => {
+    if (state.phase !== "done" || !invoiceFill) return;
+    const rows = state.analysis.results.filter((row) => invoiceFill.stts.includes(row.stt));
+    rememberManualDates(rows, invoiceFill.checkout);
+    const analysis = rows.reduce(
+      (current, row) => setManualCheckout(current, row.stt, invoiceFill.checkout, state.threshold),
+      state.analysis,
     );
-  }, []);
+    setState({ ...state, analysis });
+    setInvoiceFill(null);
+  }, [state, invoiceFill]);
+
+  const handleDismissInvoiceFill = useCallback(() => setInvoiceFill(null), []);
 
   const save = useCallback(async (write: () => Promise<{ savedTo: string | null }>) => {
     try {
@@ -277,6 +308,9 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
     handleCancel,
     handleStopAi,
     handleEditCheckout,
+    invoiceFill,
+    handleApplyInvoiceFill,
+    handleDismissInvoiceFill,
     handleSave,
     handleSaveAs,
     handleSaveWarnings,

@@ -7,6 +7,7 @@ import { cn } from "cn";
 import {
   DEFAULT_TABLE_PREFS,
   filterRows,
+  formatDate,
   loadTablePrefs,
   moveColumn,
   nextSort,
@@ -26,8 +27,15 @@ import { ResultTable } from "./ResultTable";
 import { SummaryTiles } from "./SummaryTiles";
 
 import type { AnalysisResult, ColumnId, SortState, StatusFilter, TablePrefs } from "@kiemtra/core";
+import type { InvoiceFill } from "./useInvoiceCheck";
 
-type ResultsViewProps = { analysis: AnalysisResult; onEditCheckout?: (stt: number, checkout: Date) => void };
+type ResultsViewProps = {
+  analysis: AnalysisResult;
+  onEditCheckout?: (stt: number, checkout: Date) => void;
+  invoiceFill?: InvoiceFill | null;
+  onApplyInvoiceFill?: () => void;
+  onDismissInvoiceFill?: () => void;
+};
 type Mode = "rows" | "customers";
 
 const MODES: [Mode, string][] = [
@@ -36,7 +44,13 @@ const MODES: [Mode, string][] = [
 ];
 const COLUMNS_BY_ID = new Map(TABLE_COLUMNS.map((column) => [column.id, column]));
 
-export function ResultsView({ analysis, onEditCheckout }: ResultsViewProps) {
+export function ResultsView({
+  analysis,
+  onEditCheckout,
+  invoiceFill,
+  onApplyInvoiceFill,
+  onDismissInvoiceFill,
+}: ResultsViewProps) {
   const [mode, setMode] = useState<Mode>("rows");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
@@ -151,6 +165,20 @@ export function ResultsView({ analysis, onEditCheckout }: ResultsViewProps) {
         <CustomerSummary results={filteredRows} />
       ) : (
         <>
+          {invoiceFill && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm">
+              <span>
+                Áp dụng ngày {formatDate(invoiceFill.checkout)} cho {invoiceFill.stts.length} dòng khác chưa có ngày
+                của HĐ số {invoiceFill.invoiceNo}?
+              </span>
+              <Button size="sm" onClick={onApplyInvoiceFill}>
+                Áp dụng
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onDismissInvoiceFill}>
+                Bỏ qua
+              </Button>
+            </div>
+          )}
           <ResultTable
             rows={view.rows}
             columns={columns}

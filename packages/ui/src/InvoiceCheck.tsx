@@ -31,6 +31,9 @@ export function InvoiceCheck() {
     handleCancel,
     handleStopAi,
     handleEditCheckout,
+    invoiceFill,
+    handleApplyInvoiceFill,
+    handleDismissInvoiceFill,
     handleSave,
     handleSaveAs,
     handleSaveWarnings,
@@ -166,7 +169,16 @@ export function InvoiceCheck() {
         </Alert>
       )}
 
-      {state.phase === "done" && <ResultsView key={state.runId} analysis={state.analysis} onEditCheckout={handleEditCheckout} />}
+      {state.phase === "done" && (
+        <ResultsView
+          key={state.runId}
+          analysis={state.analysis}
+          onEditCheckout={handleEditCheckout}
+          invoiceFill={invoiceFill}
+          onApplyInvoiceFill={handleApplyInvoiceFill}
+          onDismissInvoiceFill={handleDismissInvoiceFill}
+        />
+      )}
 
       {state.phase === "batch" && <BatchResults items={state.items} isRunning={state.isRunning} />}
     </main>

@@ -11,6 +11,7 @@ export * from "./checkout";
 export * from "./columns";
 export * from "./formatDate";
 export * from "./inputError";
+export * from "./manualDates";
 export * from "./mappingMemory";
 export * from "./resultTemplate";
 export * from "./tableColumns";
