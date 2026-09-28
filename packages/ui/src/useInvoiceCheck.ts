@@ -1,12 +1,31 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
-import { analyze, fetchAiOutcomes, InputError, needsAi, onlyWarnings, resultTemplate } from "@kiemtra/core";
+import {
+  analyze,
+  fetchAiOutcomes,
+  InputError,
+  needsAi,
+  onlyWarnings,
+  recallMapping,
+  rememberMapping,
+  resultTemplate,
+  setManualCheckout,
+  withAiCache,
+} from "@kiemtra/core";
 
 import { usePlatform } from "./platform";
 
-import type { AiSettings, AnalysisResult, ColumnMapping, Counts, InputErrorCode, SheetColumn } from "@kiemtra/core";
+import type {
+  AiProgress,
+  AiSettings,
+  AnalysisResult,
+  ColumnMapping,
+  Counts,
+  InputErrorCode,
+  SheetColumn,
+} from "@kiemtra/core";
 import type ExcelJS from "exceljs";
 import type { SourceFile } from "./platform";
 
@@ -36,7 +55,7 @@ export type CheckState =
   | { phase: "idle" }
   | { phase: "processing"; fileName: string }
   | { phase: "mapping"; source: SourceRef; workbook: ExcelJS.Workbook; columns: SheetColumn[]; mapping: ColumnMapping }
-  | { phase: "done"; runId: number; source: SourceRef; analysis: AnalysisResult; output: ArrayBuffer }
+  | { phase: "done"; runId: number; source: SourceRef; analysis: AnalysisResult; threshold: number }
   | { phase: "batch"; items: BatchItem[]; isRunning: boolean }
   | { phase: "error"; message: string };
 
@@ -56,29 +75,44 @@ function errorMessage(error: unknown): string {
   return error instanceof InputError ? ERROR_MESSAGES[error.code] : ERROR_MESSAGES.unexpected;
 }
 
+async function buildWorkbook(analysis: AnalysisResult, sourceName: string): Promise<ArrayBuffer> {
+  const { writeResult } = await import("@kiemtra/core/workbook");
+  return writeResult(resultTemplate(), analysis, sourceName);
+}
+
 export function useInvoiceCheck(aiSettings: AiSettings) {
   const platform = usePlatform();
+  const askAi = useMemo(() => withAiCache(platform.askAi), [platform]);
   const [state, setState] = useState<CheckState>({ phase: "idle" });
   const [savedTo, setSavedTo] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [aiProgress, setAiProgress] = useState<AiProgress | null>(null);
+  const stopRef = useRef<AbortController | null>(null);
 
   const check = useCallback(
-    async (source: SourceRef, workbook: ExcelJS.Workbook, mapping: ColumnMapping) => {
-      const { readRows, writeResult } = await import("@kiemtra/core/workbook");
+    async (workbook: ExcelJS.Workbook, mapping: ColumnMapping, signal: AbortSignal) => {
+      const { readRows } = await import("@kiemtra/core/workbook");
       const input = readRows(workbook, mapping);
       const aiIndices = needsAi(input.rows);
       const outcomes = await fetchAiOutcomes(
         aiIndices.map((index) => input.rows[index].info),
         aiSettings,
-        platform.askAi,
+        askAi,
+        { signal, onProgress: (progress) => setAiProgress(progress.total > 0 ? progress : null) },
       );
+      setAiProgress(null);
       const ai = new Map(aiIndices.map((rowIndex, k) => [rowIndex, outcomes[k]]));
-      const analysis = analyze(input.rows, input.threshold, ai);
-      const output = await writeResult(resultTemplate(), analysis, source.name);
-      return { analysis, output };
+      return { analysis: analyze(input.rows, input.threshold, ai), threshold: input.threshold };
     },
-    [aiSettings, platform],
+    [aiSettings, askAi],
   );
+
+  // One stop button per run: it ends AI for the file being checked and any files after it.
+  const startRun = () => {
+    const controller = new AbortController();
+    stopRef.current = controller;
+    return controller.signal;
+  };
 
   const runAnalysis = useCallback(
     async (source: SourceRef, workbook: ExcelJS.Workbook, mapping: ColumnMapping) => {
@@ -86,9 +120,10 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       setSavedTo(null);
       setSaveError(null);
       try {
-        const { analysis, output } = await check(source, workbook, mapping);
-        setState({ phase: "done", runId: Date.now(), source, analysis, output });
+        const { analysis, threshold } = await check(workbook, mapping, startRun());
+        setState({ phase: "done", runId: Date.now(), source, analysis, threshold });
       } catch (error) {
+        setAiProgress(null);
         setState({ phase: "error", message: errorMessage(error) });
       }
     },
@@ -106,8 +141,9 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
       try {
         const { inspectInput } = await import("@kiemtra/core/workbook");
         const inspected = await inspectInput(file.data);
-        if (inspected.isComplete) {
-          await runAnalysis(source, inspected.workbook, inspected.mapping);
+        const remembered = inspected.isComplete ? null : recallMapping(inspected.columns);
+        if (inspected.isComplete || remembered) {
+          await runAnalysis(source, inspected.workbook, remembered ?? inspected.mapping);
           return;
         }
         const { workbook, columns, mapping } = inspected;
@@ -124,6 +160,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
     async (files: SourceFile[]) => {
       setSavedTo(null);
       setSaveError(null);
+      const signal = startRun();
       const items: BatchItem[] = files.map((file) => ({ name: file.name, status: "waiting" }));
       const update = (index: number, item: Partial<BatchItem>, isRunning = true) => {
         items[index] = { ...items[index], ...item };
@@ -136,12 +173,16 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
           if (file.data.byteLength > MAX_FILE_BYTES) throw new Error(ERROR_MESSAGES.too_large);
           const source: SourceRef = { name: file.name, path: file.path };
           const inspected = await inspectInput(file.data);
-          if (!inspected.isComplete) throw new Error(NEEDS_MAPPING);
-          const { analysis, output } = await check(source, inspected.workbook, inspected.mapping);
+          const mapping = inspected.isComplete ? inspected.mapping : recallMapping(inspected.columns);
+          if (!mapping) throw new Error(NEEDS_MAPPING);
+          const { analysis } = await check(inspected.workbook, mapping, signal);
+          const output = await buildWorkbook(analysis, file.name);
           const { savedTo } = await platform.saveResult(output, outputFileName(file.name), source);
           update(index, { status: "done", counts: analysis.counts, savedTo });
         } catch (error) {
-          const message = error instanceof InputError ? errorMessage(error) : error instanceof Error ? error.message : String(error);
+          setAiProgress(null);
+          const message =
+            error instanceof InputError ? errorMessage(error) : error instanceof Error ? error.message : String(error);
           update(index, { status: "error", message: message || ERROR_MESSAGES.unexpected });
         }
       }
@@ -167,6 +208,7 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
   const handleConfirmMapping = useCallback(
     (mapping: ColumnMapping) => {
       if (state.phase !== "mapping") return;
+      rememberMapping(state.columns, mapping);
       void runAnalysis(state.source, state.workbook, mapping);
     },
     [state, runAnalysis],
@@ -174,47 +216,60 @@ export function useInvoiceCheck(aiSettings: AiSettings) {
 
   const handleCancel = useCallback(() => setState({ phase: "idle" }), []);
 
-  const save = useCallback(
-    async (write: () => Promise<{ savedTo: string | null }>) => {
-      try {
-        const outcome = await write();
-        if (outcome.savedTo) setSavedTo(outcome.savedTo);
-        setSaveError(null);
-      } catch (error) {
-        setSaveError(`Không lưu được file: ${String(error)}`);
-      }
-    },
-    [],
-  );
+  const handleStopAi = useCallback(() => stopRef.current?.abort(), []);
 
+  const handleEditCheckout = useCallback((stt: number, checkout: Date) => {
+    setState((current) =>
+      current.phase === "done"
+        ? { ...current, analysis: setManualCheckout(current.analysis, stt, checkout, current.threshold) }
+        : current,
+    );
+  }, []);
+
+  const save = useCallback(async (write: () => Promise<{ savedTo: string | null }>) => {
+    try {
+      const outcome = await write();
+      if (outcome.savedTo) setSavedTo(outcome.savedTo);
+      setSaveError(null);
+    } catch (error) {
+      setSaveError(`Không lưu được file: ${String(error)}`);
+    }
+  }, []);
+
+  // The workbook is built at save time, so dates typed into the table are included.
   const handleSave = useCallback(async () => {
     if (state.phase !== "done") return;
-    await save(() => platform.saveResult(state.output, outputFileName(state.source.name), state.source));
+    const { analysis, source } = state;
+    await save(async () =>
+      platform.saveResult(await buildWorkbook(analysis, source.name), outputFileName(source.name), source),
+    );
   }, [state, platform, save]);
 
   const handleSaveAs = useCallback(async () => {
     if (state.phase !== "done" || !platform.saveResultAs) return;
+    const { analysis, source } = state;
     const saveResultAs = platform.saveResultAs;
-    await save(() => saveResultAs(state.output, outputFileName(state.source.name)));
+    await save(async () => saveResultAs(await buildWorkbook(analysis, source.name), outputFileName(source.name)));
   }, [state, platform, save]);
 
   const handleSaveWarnings = useCallback(async () => {
     if (state.phase !== "done") return;
-    const { source, analysis } = state;
-    await save(async () => {
-      const { writeResult } = await import("@kiemtra/core/workbook");
-      const data = await writeResult(resultTemplate(), onlyWarnings(analysis), source.name);
-      return platform.saveResult(data, warningsFileName(source.name), source);
-    });
+    const { analysis, source } = state;
+    await save(async () =>
+      platform.saveResult(await buildWorkbook(onlyWarnings(analysis), source.name), warningsFileName(source.name), source),
+    );
   }, [state, platform, save]);
 
   return {
     state,
     savedTo,
     saveError,
+    aiProgress,
     openFiles,
     handleConfirmMapping,
     handleCancel,
+    handleStopAi,
+    handleEditCheckout,
     handleSave,
     handleSaveAs,
     handleSaveWarnings,

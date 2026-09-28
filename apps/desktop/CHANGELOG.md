@@ -1,5 +1,16 @@
 # Nhật ký thay đổi
 
+## 1.2.0 — 2026-09-28
+- Sửa ngày check-out ngay trong bảng (nút bút chì, hoặc "Nhập ngày" ở dòng không xác định); trạng thái, số ngày chậm và file kết quả cập nhật theo.
+- Thanh tiến độ khi hỏi AI và nút "Dừng".
+- Nhớ ngày AI đã tìm được: nội dung đã gặp không phải hỏi AI lại (xóa được trong Cài đặt AI).
+- Nút "Kiểm tra khóa" để thử khóa OpenAI và model.
+- Nhớ các cột đã chọn cho từng mẫu file Excel.
+- Danh sách "Mở gần đây" (5 file).
+- Xem kết quả "Theo khách hàng": khách nào có nhiều hóa đơn cảnh báo nhất.
+- Số yêu cầu song song trên 50 nay được dùng đầy đủ.
+- Số phiên bản và cập nhật gọn trong một nút ở góc trên.
+
 ## 1.1.0 — 2026-09-28
 - Tự động cập nhật: khi có phiên bản mới, ứng dụng hỏi trước rồi tự tải và khởi động lại.
 - Hiển thị số phiên bản và mục "Có gì mới".

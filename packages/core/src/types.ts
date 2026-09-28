@@ -10,7 +10,7 @@ export type InputRow = {
 
 export type Status = "Cảnh báo" | "Bình thường" | "Không xác định";
 
-export type Method = "Quy tắc" | "AI";
+export type Method = "Quy tắc" | "AI" | "Thủ công";
 
 export type AiOutcome = { date: Date | null; note?: string };
 

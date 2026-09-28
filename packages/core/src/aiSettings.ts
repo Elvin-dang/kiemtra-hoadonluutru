@@ -25,7 +25,7 @@ export function sanitizeSettings(value: unknown, limits: AiLimits): AiSettings {
   return result;
 }
 
-export function browserStorage(): KeyValueStorage | undefined {
+export function browserStorage(): Storage | undefined {
   try {
     return typeof window === "undefined" ? undefined : window.localStorage;
   } catch {

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { aiCacheSize, clearAiCache } from "@kiemtra/core";
+
 import { AiKeyFields } from "./AiKeyFields";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -39,6 +41,7 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
   // Drafts let a field be empty while typing; only whole numbers ≥ 1 are committed.
   const [drafts, setDrafts] = useState<Drafts>(() => toDrafts(settings));
   const [syncedSettings, setSyncedSettings] = useState(settings);
+  const [cacheSize, setCacheSize] = useState(0);
   if (syncedSettings !== settings) {
     setSyncedSettings(settings);
     setDrafts(toDrafts(settings));
@@ -51,7 +54,7 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
   };
 
   return (
-    <details className="rounded-lg border p-4">
+    <details className="rounded-lg border p-4" onToggle={() => setCacheSize(aiCacheSize())}>
       <summary className="cursor-pointer font-medium">
         Cài đặt AI{" "}
         <span className={settings.isEnabled ? "text-green-700" : "text-muted-foreground"}>
@@ -96,9 +99,19 @@ export function AiSettingsPanel({ settings, limits, onChange, onReset }: AiSetti
         <Button variant="outline" disabled={!settings.isEnabled} onClick={onReset}>
           Khôi phục mặc định
         </Button>
+        <Button
+          variant="outline"
+          disabled={cacheSize === 0}
+          onClick={() => {
+            clearAiCache();
+            setCacheSize(0);
+          }}
+        >
+          Xóa bộ nhớ AI ({cacheSize.toLocaleString("vi-VN")})
+        </Button>
         <p className="text-sm text-muted-foreground">
           {kind === "desktop"
-            ? "Lưu trên máy này."
+            ? "Lưu trên máy này. Ngày AI đã tìm được được nhớ lại, nên nội dung đã gặp không phải hỏi AI lần nữa."
             : "Lưu trên trình duyệt này và gửi kèm dữ liệu tới máy chủ. Máy chủ không cho vượt giới hạn trên."}
         </p>
       </div>

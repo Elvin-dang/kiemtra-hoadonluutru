@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 export type SourceFile = { name: string; path: string | null; data: ArrayBuffer };
 export type SaveOutcome = { savedTo: string | null };
 export type UpdateInfo = { version: string; notes: string };
+export type RecentFile = { name: string; path: string };
 
 // Everything the shared screens need from the app they run in (web or desktop).
 export type Platform = {
@@ -24,6 +25,9 @@ export type Platform = {
   saveResultAs?: (data: ArrayBuffer, fileName: string) => Promise<SaveOutcome>;
   revealFile?: (path: string) => Promise<void>;
   openResult?: (path: string) => Promise<void>;
+  // Newest first; opening a file that has gone missing drops it from the list and throws.
+  recentFiles?: () => RecentFile[];
+  openRecent?: (path: string) => Promise<SourceFile[]>;
   app?: {
     version: () => Promise<string>;
     changelog: string;

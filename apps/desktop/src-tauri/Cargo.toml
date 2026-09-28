@@ -1,6 +1,6 @@
 [package]
 name = "kiemtra-hoadon"
-version = "1.1.0"
+version = "1.2.0"
 description = "Kiểm tra hóa đơn lưu trú"
 edition = "2021"
 

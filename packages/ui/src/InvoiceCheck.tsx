@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect } from "react";
 
+import { AiProgressBar } from "./AiProgressBar";
 import { AiSettingsPanel } from "./AiSettingsPanel";
 import { BatchResults } from "./BatchResults";
 import { ColumnMapping } from "./ColumnMapping";
@@ -9,6 +10,7 @@ import { Alert, AlertDescription } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { usePlatform } from "./platform";
+import { RecentFiles } from "./RecentFiles";
 import { ResultsView } from "./ResultsView";
 import { useAiSettings } from "./useAiSettings";
 import { useInvoiceCheck } from "./useInvoiceCheck";
@@ -23,9 +25,12 @@ export function InvoiceCheck() {
     state,
     savedTo,
     saveError,
+    aiProgress,
     openFiles,
     handleConfirmMapping,
     handleCancel,
+    handleStopAi,
+    handleEditCheckout,
     handleSave,
     handleSaveAs,
     handleSaveWarnings,
@@ -139,7 +144,10 @@ export function InvoiceCheck() {
         onReset={ai.resetSettings}
       />
 
-      {state.phase === "processing" && <p className="text-muted-foreground">Đang xử lý…</p>}
+      {state.phase === "processing" && !aiProgress && <p className="text-muted-foreground">Đang xử lý…</p>}
+      {aiProgress && <AiProgressBar progress={aiProgress} onStop={handleStopAi} />}
+
+      {state.phase === "idle" && <RecentFiles isDisabled={isProcessing} onOpen={openFiles} />}
 
       {state.phase === "mapping" && (
         <ColumnMapping
@@ -158,7 +166,7 @@ export function InvoiceCheck() {
         </Alert>
       )}
 
-      {state.phase === "done" && <ResultsView key={state.runId} analysis={state.analysis} />}
+      {state.phase === "done" && <ResultsView key={state.runId} analysis={state.analysis} onEditCheckout={handleEditCheckout} />}
 
       {state.phase === "batch" && <BatchResults items={state.items} isRunning={state.isRunning} />}
     </main>

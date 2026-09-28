@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { formatDate } from "./formatDate";
 
-import { analyze, needsAi, onlyWarnings } from "./analyze";
+import { analyze, needsAi, onlyWarnings, setManualCheckout } from "./analyze";
 import { inspectInput, readRows } from "./workbook";
 
 import type { InputRow } from "./types";
@@ -124,5 +124,23 @@ describe("onlyWarnings", () => {
     const warnings = onlyWarnings(analysis);
     expect(warnings.results.map((r) => [r.stt, r.status])).toEqual([[2, "Cảnh báo"]]);
     expect(warnings.counts).toEqual({ total: 1, ok: 0, warn: 1, unknown: 0 });
+  });
+});
+
+describe("setManualCheckout", () => {
+  it("judges a typed check-out date like any other and recounts", () => {
+    const analysis = analyze([row({ info: "" }), row({ info: "(30/04/2025-02/05/2025)", invoiceDate: "02/05/2025" })], 1);
+    expect(analysis.counts).toEqual({ total: 2, ok: 1, warn: 0, unknown: 1 });
+
+    const fixed = setManualCheckout(analysis, 1, new Date(Date.UTC(2025, 3, 30)), 1);
+    expect(fixed.results[0]).toMatchObject({ method: "Thủ công", delay: 3, status: "Cảnh báo", note: "Nhập tay" });
+    expect(fixed.results[1]).toBe(analysis.results[1]);
+    expect(fixed.counts).toEqual({ total: 2, ok: 1, warn: 1, unknown: 0 });
+  });
+
+  it("still flags a row whose invoice date is invalid", () => {
+    const analysis = analyze([row({ invoiceDate: "không rõ" })], 1);
+    const fixed = setManualCheckout(analysis, 1, new Date(Date.UTC(2025, 3, 30)), 1);
+    expect(fixed.results[0]).toMatchObject({ status: "Không xác định", note: "Ngày hóa đơn không hợp lệ" });
   });
 });

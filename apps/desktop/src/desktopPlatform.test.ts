@@ -179,3 +179,24 @@ describe("desktopPlatform.onExternalFiles", () => {
     expect(thirdHandler).not.toHaveBeenCalled();
   });
 });
+
+describe("desktopPlatform recent files", () => {
+  it("keeps the last five opened files, newest first, and drops one that can no longer be read", async () => {
+    const data = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => void data.set(key, value) },
+    });
+    mockInvoke(null, { "/d/gone.xlsx": new Error("Không đọc được file: gone.xlsx") });
+    const platform = await loadDesktopPlatform();
+
+    for (const name of ["a", "b", "c", "d", "e", "f", "b"]) await platform.openRecent?.(`/d/${name}.xlsx`);
+    expect(platform.recentFiles?.().map((file) => file.name)).toEqual(["b.xlsx", "f.xlsx", "e.xlsx", "d.xlsx", "c.xlsx"]);
+
+    await expect(platform.openRecent?.("/d/gone.xlsx")).rejects.toThrow("gone.xlsx");
+    await platform.openRecent?.("/d/e.xlsx");
+    data.set("kiemtra-hoadon:recent-files", JSON.stringify(["/d/gone.xlsx", "/d/e.xlsx"]));
+    await expect(platform.openRecent?.("/d/gone.xlsx")).rejects.toThrow();
+    expect(platform.recentFiles?.().map((file) => file.name)).toEqual(["e.xlsx"]);
+    vi.unstubAllGlobals();
+  });
+});

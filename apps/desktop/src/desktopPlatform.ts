@@ -8,7 +8,7 @@ import changelog from "../CHANGELOG.md?raw";
 import { toAiAnswer } from "./aiAnswer";
 
 import type { AiLimits } from "@kiemtra/core";
-import type { Platform, SaveOutcome, SourceFile, UpdateInfo } from "@kiemtra/ui";
+import type { Platform, RecentFile, SaveOutcome, SourceFile, UpdateInfo } from "@kiemtra/ui";
 import type { RustAnswer } from "./aiAnswer";
 
 // Same ceilings as the website's server defaults; the user's own settings apply within them.
@@ -16,6 +16,8 @@ const LOCAL_LIMITS: AiLimits = { maxTexts: 100000, maxTextLength: 1000, concurre
 const EXCEL_FILTER = [{ name: "Excel", extensions: ["xlsx", "xlsm"] }];
 const EXCEL_PATH = /\.xls[xm]$/i;
 const LAST_DIR_KEY = "kiemtra-hoadon:last-dir";
+const RECENT_KEY = "kiemtra-hoadon:recent-files";
+const RECENT_LIMIT = 5;
 
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
@@ -44,9 +46,36 @@ function inLastDir(fileName: string): string {
   return dir ? `${dir}${dir.includes("\\") ? "\\" : "/"}${fileName}` : fileName;
 }
 
-function readSources(paths: string[]): Promise<SourceFile[]> {
+function recentFiles(): RecentFile[] {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(RECENT_KEY) ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((path): path is string => typeof path === "string")
+      .map((path) => ({ name: baseName(path), path }));
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(paths: string[]) {
+  try {
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(paths.slice(0, RECENT_LIMIT)));
+  } catch {
+    // Storage off: no recent list.
+  }
+}
+
+function rememberRecent(paths: string[]) {
+  const others = recentFiles().map((file) => file.path).filter((path) => !paths.includes(path));
+  saveRecent([...paths, ...others]);
+}
+
+async function readSources(paths: string[]): Promise<SourceFile[]> {
   if (paths[0]) rememberDir(paths[0]);
-  return Promise.all(paths.map(readSource));
+  const files = await Promise.all(paths.map(readSource));
+  rememberRecent(paths);
+  return files;
 }
 
 async function readSource(path: string): Promise<SourceFile> {
@@ -92,6 +121,15 @@ export const desktopPlatform: Platform = {
   saveResultAs: saveAs,
   revealFile: (path) => revealItemInDir(path),
   openResult: (path) => invoke("open_result", { path }),
+  recentFiles,
+  openRecent: async (path) => {
+    try {
+      return await readSources([path]);
+    } catch (error) {
+      saveRecent(recentFiles().map((file) => file.path).filter((candidate) => candidate !== path));
+      throw error;
+    }
+  },
   pickFiles: async () => {
     const paths = await open({ multiple: true, directory: false, filters: EXCEL_FILTER, defaultPath: lastDir() });
     return paths ? readSources(paths) : [];

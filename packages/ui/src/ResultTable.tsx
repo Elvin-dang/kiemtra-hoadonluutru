@@ -1,7 +1,8 @@
-import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, PencilIcon } from "lucide-react";
 import { cn } from "cn";
 
-import { cellText, formatDate } from "@kiemtra/core";
+import { cellText, formatDate, fromIsoDate, toIsoDate } from "@kiemtra/core";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
 
@@ -15,6 +16,7 @@ type ResultTableProps = {
   expandedRows: Set<number>;
   onSort: (column: ColumnId) => void;
   onToggleRow: (stt: number) => void;
+  onEditCheckout?: (stt: number, checkout: Date) => void;
 };
 
 const STATUS_TONE: Record<Status, string> = {
@@ -56,7 +58,74 @@ function SortIcon({ direction }: { direction: "asc" | "desc" | null }) {
   return <ArrowUpDownIcon className="size-3.5 opacity-40" />;
 }
 
-export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggleRow }: ResultTableProps) {
+type CheckoutCellProps = {
+  row: RowResult;
+  isEditing: boolean;
+  onStartEdit: () => void;
+  onDone: (checkout: Date | null) => void;
+};
+
+// Click the pencil (or "Nhập ngày" on an unknown row) to type the check-out date by hand.
+function CheckoutCell({ row, isEditing, onStartEdit, onDone }: CheckoutCellProps) {
+  // Enter/Escape close the input, and the blur that follows must not commit a second time.
+  const isFinished = useRef(false);
+  const finish = (checkout: Date | null) => {
+    if (isFinished.current) return;
+    isFinished.current = true;
+    onDone(checkout);
+  };
+  if (isEditing) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        aria-label={`Ngày phải lập HĐ, dòng ${row.stt}`}
+        defaultValue={row.checkout ? toIsoDate(row.checkout) : ""}
+        className="rounded-md border bg-background px-2 py-1 text-sm"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === "Enter") finish(fromIsoDate(event.currentTarget.value));
+          if (event.key === "Escape") finish(null);
+        }}
+        onBlur={(event) => finish(fromIsoDate(event.currentTarget.value))}
+      />
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {formatDate(row.checkout)}
+      <button
+        type="button"
+        aria-label={`Sửa ngày phải lập HĐ, dòng ${row.stt}`}
+        title="Nhập ngày check-out"
+        // The row itself toggles on Enter/Space; keep those keys for this button.
+        onKeyDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          isFinished.current = false;
+          onStartEdit();
+        }}
+        className={cn(
+          "inline-flex items-center gap-1 rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+          row.checkout ? "opacity-40 hover:opacity-100" : "text-amber-700",
+        )}
+      >
+        <PencilIcon className="size-3.5" />
+        {!row.checkout && <span className="text-xs">Nhập ngày</span>}
+      </button>
+    </span>
+  );
+}
+
+export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggleRow, onEditCheckout }: ResultTableProps) {
+  const [editingStt, setEditingStt] = useState<number | null>(null);
+
+  const handleEditDone = (stt: number, checkout: Date | null) => {
+    setEditingStt(null);
+    if (checkout) onEditCheckout?.(stt, checkout);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>, stt: number) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
@@ -123,7 +192,18 @@ export function ResultTable({ rows, columns, sort, expandedRows, onSort, onToggl
                         column.isLongText && column.id === "note" && "text-muted-foreground",
                       )}
                     >
-                      {column.isLongText ? <span className={cn(!isExpanded && "line-clamp-2")}>{text}</span> : text}
+                      {column.id === "checkout" && onEditCheckout ? (
+                        <CheckoutCell
+                          row={row}
+                          isEditing={editingStt === row.stt}
+                          onStartEdit={() => setEditingStt(row.stt)}
+                          onDone={(checkout) => handleEditDone(row.stt, checkout)}
+                        />
+                      ) : column.isLongText ? (
+                        <span className={cn(!isExpanded && "line-clamp-2")}>{text}</span>
+                      ) : (
+                        text
+                      )}
                     </TableCell>
                   );
                 })}

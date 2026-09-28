@@ -24,6 +24,49 @@ describe("fetchAiOutcomes", () => {
     expect(outcomes[119]).toEqual({ date: MAY_2 });
   });
 
+  it("makes batches as large as the parallel limit when that is above 50", async () => {
+    const askAi = vi.fn<AskAi>(async (texts) => ok(texts));
+    await fetchAiOutcomes(Array.from({ length: 250 }, (_, i) => `t${i}`), { ...WIDE, concurrency: 100 }, askAi);
+    expect(askAi.mock.calls.map(([batch]) => batch.length)).toEqual([100, 100, 50]);
+  });
+
+  it("reports progress after each batch", async () => {
+    const onProgress = vi.fn();
+    await fetchAiOutcomes(Array.from({ length: 120 }, (_, i) => `t${i}`), WIDE, async (texts) => ok(texts), { onProgress });
+    expect(onProgress.mock.calls.map(([p]) => p)).toEqual([
+      { done: 0, total: 120 },
+      { done: 50, total: 120 },
+      { done: 100, total: 120 },
+      { done: 120, total: 120 },
+    ]);
+  });
+
+  it("stops at once when aborted mid-batch and marks every unanswered row", async () => {
+    const controller = new AbortController();
+    const askAi = vi.fn<AskAi>(() => {
+      controller.abort();
+      return new Promise<AiAnswer>(() => {}); // never answers
+    });
+    const outcomes = await fetchAiOutcomes(Array.from({ length: 120 }, (_, i) => `t${i}`), WIDE, askAi, {
+      signal: controller.signal,
+    });
+    expect(askAi).toHaveBeenCalledTimes(1);
+    expect(outcomes).toHaveLength(120);
+    expect(new Set(outcomes.map((o) => o.note))).toEqual(new Set(["Cần kiểm tra thủ công (đã dừng AI)"]));
+  });
+
+  it("keeps the answers already received and sends nothing more after a stop", async () => {
+    const controller = new AbortController();
+    const askAi = vi.fn<AskAi>(async (texts) => ok(texts));
+    const outcomes = await fetchAiOutcomes(Array.from({ length: 120 }, (_, i) => `t${i}`), WIDE, askAi, {
+      signal: controller.signal,
+      onProgress: ({ done }) => done === 50 && controller.abort(),
+    });
+    expect(askAi).toHaveBeenCalledTimes(1);
+    expect(outcomes[49]).toEqual({ date: MAY_2 });
+    expect(outcomes[50]).toEqual({ date: null, note: "Cần kiểm tra thủ công (đã dừng AI)" });
+  });
+
   it("marks rows beyond maxTexts without sending them", async () => {
     const askAi = vi.fn<AskAi>(async (texts) => ok(texts));
     const outcomes = await fetchAiOutcomes(["a", "b", "c"], { ...DEFAULT_AI_SETTINGS, maxTexts: 2 }, askAi);

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { SearchIcon, XIcon } from "lucide-react";
+import { cn } from "cn";
 
 import {
   DEFAULT_TABLE_PREFS,
@@ -17,6 +18,7 @@ import {
 } from "@kiemtra/core";
 
 import { ColumnMenu } from "./ColumnMenu";
+import { CustomerSummary } from "./CustomerSummary";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { NativeSelect, NativeSelectOption } from "./components/ui/native-select";
@@ -25,11 +27,17 @@ import { SummaryTiles } from "./SummaryTiles";
 
 import type { AnalysisResult, ColumnId, SortState, StatusFilter, TablePrefs } from "@kiemtra/core";
 
-type ResultsViewProps = { analysis: AnalysisResult };
+type ResultsViewProps = { analysis: AnalysisResult; onEditCheckout?: (stt: number, checkout: Date) => void };
+type Mode = "rows" | "customers";
 
+const MODES: [Mode, string][] = [
+  ["rows", "Từng hóa đơn"],
+  ["customers", "Theo khách hàng"],
+];
 const COLUMNS_BY_ID = new Map(TABLE_COLUMNS.map((column) => [column.id, column]));
 
-export function ResultsView({ analysis }: ResultsViewProps) {
+export function ResultsView({ analysis, onEditCheckout }: ResultsViewProps) {
+  const [mode, setMode] = useState<Mode>("rows");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>(null);
@@ -38,9 +46,13 @@ export function ResultsView({ analysis }: ResultsViewProps) {
   const [prefs, setPrefs] = useState<TablePrefs>(() => loadTablePrefs());
   const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set());
 
+  const filteredRows = useMemo(
+    () => filterRows(analysis.results, statusFilter, search),
+    [analysis.results, statusFilter, search],
+  );
   const view = useMemo(
-    () => paginate(sortRows(filterRows(analysis.results, statusFilter, search), sort), page, prefs.pageSize),
-    [analysis.results, statusFilter, search, sort, page, prefs.pageSize],
+    () => paginate(sortRows(filteredRows, sort), page, prefs.pageSize),
+    [filteredRows, sort, page, prefs.pageSize],
   );
   const columns = prefs.columnOrder
     .filter((id) => prefs.visibleColumns.includes(id))
@@ -94,6 +106,19 @@ export function ResultsView({ analysis }: ResultsViewProps) {
       <SummaryTiles counts={analysis.counts} activeFilter={statusFilter} onSelect={handleFilter} />
 
       <div className="flex flex-wrap items-center gap-2">
+        <div role="group" aria-label="Cách xem" className="inline-flex rounded-lg border p-0.5">
+          {MODES.map(([value, label]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={mode === value ? "secondary" : "ghost"}
+              aria-pressed={mode === value}
+              onClick={() => setMode(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
         <div className="relative w-full sm:w-96">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -111,7 +136,7 @@ export function ResultsView({ analysis }: ResultsViewProps) {
             <XIcon />
           </Button>
         )}
-        <div className="sm:ml-auto">
+        <div className={cn("sm:ml-auto", mode !== "rows" && "hidden")}>
           <ColumnMenu
             columnOrder={prefs.columnOrder}
             visibleColumns={prefs.visibleColumns}
@@ -122,56 +147,63 @@ export function ResultsView({ analysis }: ResultsViewProps) {
         </div>
       </div>
 
-      <ResultTable
-        rows={view.rows}
-        columns={columns}
-        sort={sort}
-        expandedRows={expandedRows}
-        onSort={handleSort}
-        onToggleRow={handleToggleRow}
-      />
+      {mode === "customers" ? (
+        <CustomerSummary results={filteredRows} />
+      ) : (
+        <>
+          <ResultTable
+            rows={view.rows}
+            columns={columns}
+            sort={sort}
+            expandedRows={expandedRows}
+            onSort={handleSort}
+            onToggleRow={handleToggleRow}
+            onEditCheckout={onEditCheckout}
+          />
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-        <span>
-          {view.total === 0 ? "0 dòng" : `${view.from}–${view.to} / ${view.total} dòng`}
-          {view.total !== analysis.results.length && ` (lọc từ ${analysis.results.length})`}
-        </span>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2">
-            Số dòng/trang
-            <NativeSelect
-              size="sm"
-              aria-label="Số dòng/trang"
-              value={String(prefs.pageSize)}
-              onChange={(event) => handlePageSize(event.target.value)}
-            >
-              {PAGE_SIZES.map((size) => (
-                <NativeSelectOption key={size} value={String(size)}>
-                  {size}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </label>
-          {view.pageCount > 1 && (
-            <>
-              <Button variant="outline" size="sm" disabled={view.page === 1} onClick={() => setPage(view.page - 1)}>
-                ‹ Trước
-              </Button>
-              <span>
-                Trang {view.page}/{view.pageCount}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={view.page === view.pageCount}
-                onClick={() => setPage(view.page + 1)}
-              >
-                Sau ›
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+            <span>
+              {view.total === 0 ? "0 dòng" : `${view.from}–${view.to} / ${view.total} dòng`}
+              {view.total !== analysis.results.length && ` (lọc từ ${analysis.results.length})`}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2">
+                Số dòng/trang
+                <NativeSelect
+                  size="sm"
+                  aria-label="Số dòng/trang"
+                  value={String(prefs.pageSize)}
+                  onChange={(event) => handlePageSize(event.target.value)}
+                >
+                  {PAGE_SIZES.map((size) => (
+                    <NativeSelectOption key={size} value={String(size)}>
+                      {size}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </label>
+              {view.pageCount > 1 && (
+                <>
+                  <Button variant="outline" size="sm" disabled={view.page === 1} onClick={() => setPage(view.page - 1)}>
+                    ‹ Trước
+                  </Button>
+                  <span>
+                    Trang {view.page}/{view.pageCount}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={view.page === view.pageCount}
+                    onClick={() => setPage(view.page + 1)}
+                  >
+                    Sau ›
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </section>
   );
 }
