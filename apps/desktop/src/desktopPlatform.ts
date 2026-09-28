@@ -10,7 +10,7 @@ import type { Platform, SaveOutcome, SourceFile } from "@kiemtra/ui";
 import type { RustAnswer } from "./aiAnswer";
 
 // Same ceilings as the website's server defaults; the user's own settings apply within them.
-const LOCAL_LIMITS: AiLimits = { maxTexts: 1000, maxTextLength: 500, concurrency: 10 };
+const LOCAL_LIMITS: AiLimits = { maxTexts: 100000, maxTextLength: 1000, concurrency: 100 };
 const EXCEL_FILTER = [{ name: "Excel", extensions: ["xlsx", "xlsm"] }];
 const EXCEL_PATH = /\.xls[xm]$/i;
 

@@ -11,9 +11,9 @@ pub const PROMPT: &str =
     "Trích xuất ngày kết thúc dịch vụ/check-out từ thông tin lưu trú. Chỉ trả về DD/MM/YYYY hoặc KHONG_XAC_DINH.";
 pub const MAX_OUTPUT_TOKENS: u32 = 1000;
 // Ceilings — the same as the website's server defaults.
-pub const MAX_TEXTS: usize = 1000;
-pub const MAX_TEXT_LENGTH: usize = 500;
-pub const MAX_CONCURRENCY: usize = 10;
+pub const MAX_TEXTS: usize = 100_000;
+pub const MAX_TEXT_LENGTH: usize = 1000;
+pub const MAX_CONCURRENCY: usize = 100;
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -352,8 +352,8 @@ mod tests {
 
     #[test]
     fn limits_are_clamped_to_one_and_the_ceilings() {
-        let asked = Limits { max_texts: 5000, max_text_length: 0, concurrency: 99 };
-        assert_eq!(asked.effective(), Limits { max_texts: 1000, max_text_length: 1, concurrency: 10 });
+        let asked = Limits { max_texts: 200_000, max_text_length: 0, concurrency: 999 };
+        assert_eq!(asked.effective(), Limits { max_texts: 100_000, max_text_length: 1, concurrency: 100 });
     }
 
     #[test]
