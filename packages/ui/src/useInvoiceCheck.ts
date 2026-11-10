@@ -35,14 +35,15 @@ import type {
 import type ExcelJS from "exceljs";
 import type { SourceFile } from "./platform";
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_BYTES = 100 * 1024 * 1024;
+export const MAX_FILE_MB = MAX_FILE_BYTES / 1024 / 1024;
 
 const ERROR_MESSAGES: Record<InputErrorCode | "too_large" | "unexpected", string> = {
   unreadable: "Không đọc được file Excel.",
   no_sheet: "File không có sheet dữ liệu.",
   no_rows: "File chưa có dòng hóa đơn nào.",
-  too_many_rows: "File có quá 5.000 dòng dữ liệu.",
-  too_large: "File vượt quá 10 MB.",
+  too_many_rows: "File có quá 2.000.000 dòng dữ liệu.",
+  too_large: `File vượt quá ${MAX_FILE_MB} MB.`,
   unexpected: "Đã xảy ra lỗi khi xử lý file.",
 };
 const NEEDS_MAPPING = "Không tự nhận được cột — mở riêng file này để chọn cột.";

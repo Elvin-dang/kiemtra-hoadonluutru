@@ -7,7 +7,7 @@ import { InputError } from "./inputError";
 
 import type { AnalysisResult, CellValue, ColumnMapping, InputRow, SheetColumn, Status } from "./types";
 
-export const MAX_ROWS = 5000;
+export const MAX_ROWS = 2_000_000;
 // The e-invoice "bán ra" export; any first sheet with the same headers also works.
 const SOURCE_SHEET = "BR_ChiTiet";
 // The KET_QUA_AI template states "Ngưỡng cảnh báo mặc định: ≥ 1 ngày".

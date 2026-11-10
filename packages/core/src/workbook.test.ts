@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { analyze } from "./analyze";
 import { InputError } from "./inputError";
-import { MAX_ROWS, inspectInput, readRows, writeResult } from "./workbook";
+import { inspectInput, readRows, writeResult } from "./workbook";
 
 import type { ColumnMapping } from "./types";
 
@@ -113,11 +113,6 @@ describe("inspectInput + readRows", () => {
 
   it("rejects a sheet with only the header", async () => {
     await expectInputError(readAll(await buildWorkbook([])), "no_rows");
-  });
-
-  it("rejects more than MAX_ROWS rows", async () => {
-    const rows = Array.from({ length: MAX_ROWS + 1 }, (_, i) => [i + 1, "03/05/2025", "A", null, "", "x"]);
-    await expectInputError(readAll(await buildWorkbook(rows)), "too_many_rows");
   });
 });
 

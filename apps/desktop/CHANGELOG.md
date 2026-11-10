@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## 1.3.0 — 2026-11-10
+- Mở được file Excel lớn: tối đa 100 MB mỗi file (trước là 10 MB) và không còn giới hạn 5.000 dòng.
+- Vùng kéo thả file hiện giới hạn dung lượng.
+
 ## 1.2.0 — 2026-09-28
 - Sửa ngày check-out ngay trong bảng (nút bút chì, hoặc "Nhập ngày" ở dòng không xác định); trạng thái, số ngày chậm và file kết quả cập nhật theo.
 - Kiểm tra nội dung trước khi gửi AI: dòng không thể chứa ngày (như "Thuê phòng nghỉ", "Thuê phòng nghỉ (504)") không gửi AI nữa — nhanh hơn, đỡ tốn phí; bật/tắt trong Cài đặt AI.

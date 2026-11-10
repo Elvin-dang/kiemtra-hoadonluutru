@@ -14,7 +14,7 @@ import { usePlatform } from "./platform";
 import { RecentFiles } from "./RecentFiles";
 import { ResultsView } from "./ResultsView";
 import { useAiSettings } from "./useAiSettings";
-import { useInvoiceCheck } from "./useInvoiceCheck";
+import { MAX_FILE_MB, useInvoiceCheck } from "./useInvoiceCheck";
 import { VersionBadge } from "./VersionBadge";
 
 import type { ChangeEvent } from "react";
@@ -107,7 +107,7 @@ export function InvoiceCheck() {
         >
           <UploadIcon className="size-8 text-muted-foreground" />
           <span className="text-lg font-medium">Kéo thả file Excel vào đây, hoặc bấm để chọn</span>
-          <span className="text-sm text-muted-foreground">Có thể chọn nhiều file cùng lúc · Ctrl+O</span>
+          <span className="text-sm text-muted-foreground">Có thể chọn nhiều file cùng lúc · Tối đa {MAX_FILE_MB} MB/file · Ctrl+O</span>
         </button>
       ) : (
         <div className="flex flex-wrap items-center gap-3">
